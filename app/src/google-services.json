@@ -38,6 +38,14 @@
           }
         },
         {
+          "client_id": "222720972977-nt367ql03rbeenmcafss1f8an3ik0pn0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.safepath_test1",
+            "certificate_hash": "0fb19fac67b419551805800f373542d2b820e496"
+          }
+        },
+        {
           "client_id": "222720972977-sv4855t04c31v3qv9s2e7j0k10bd17eo.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
