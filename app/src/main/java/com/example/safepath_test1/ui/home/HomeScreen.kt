@@ -207,7 +207,7 @@ fun HomeScreen(
     // Keep the watch in sync with whichever route tab the user actually has
     // selected (not hardcoded to the safe route), and re-send whenever they
     // switch tabs after results are already loaded.
-    LaunchedEffect(multiRouteResult, activeRoute, routeType) {
+    LaunchedEffect(multiRouteResult, activeRoute, routeType, currentLocation) {
         if (multiRouteResult == null) return@LaunchedEffect
         val selectedType = RouteType.valueOf(routeType)
         val route = activeRoute
@@ -217,6 +217,9 @@ fun HomeScreen(
                 routeType = selectedType.title,
                 destinationName = destination.name.ifBlank { null },
                 distanceMeters = route.distanceMeters,
+                routeLineGeoJson = route.geoJsonLineString,
+                destinationPoint = destinationPoint,
+                currentPoint = currentLocation,
             )
         } else {
             com.example.safepath_test1.wear.WearMessenger.sendIdle(context)
