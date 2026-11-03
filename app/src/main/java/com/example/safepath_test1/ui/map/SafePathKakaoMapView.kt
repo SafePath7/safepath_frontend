@@ -79,6 +79,7 @@ fun SafePathKakaoMapView(
     val facilityLatitudeBucket = currentLocation?.latitude?.times(100.0)?.roundToInt()
     val facilityLongitudeBucket = currentLocation?.longitude?.times(100.0)?.roundToInt()
 
+    // 화면 생명주기에 지도 자원을 맞추고 화면을 떠날 때 리스너와 지도를 해제한다.
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {

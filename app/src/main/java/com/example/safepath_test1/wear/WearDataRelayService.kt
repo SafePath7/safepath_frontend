@@ -8,16 +8,13 @@ import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WearDataRelayService"
 
-/** Must match WatchMotionSender.PATH_MOTION (wear module) - the two modules can't share code. */
+/** 모듈 간 코드를 공유하지 않으므로 워치의 WatchMotionSender.PATH_MOTION과 일치해야 한다. */
 private const val PATH_MOTION = "/safepath/motion"
 
 /**
- * Receives each accelerometer/gyroscope reading relayed from the watch (WatchMotionSender, wear
- * module) over the Wearable Data Layer.
- *
- * This is the watch -> phone half only. For now it just logs what arrives; once the AI server's
- * analyzeMotion() request/response format is agreed with the AI teammate, the HTTP call to the AI
- * server goes here.
+ * 워치에서 Wearable Data Layer로 전달한 가속도계·자이로스코프 측정값을 수신한다.
+ * 현재는 수신 값을 로그에 기록하며, AI 서버의 analyzeMotion 요청·응답 형식이 정해지면
+ * 이곳에서 서버를 호출한다.
  */
 class WearDataRelayService : WearableListenerService() {
 
@@ -38,14 +35,7 @@ class WearDataRelayService : WearableListenerService() {
             Log.d(
                 TAG,
                 "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f) timestamp=$timestamp"
-                    .format(
-                        accelX,
-                        accelY,
-                        accelZ,
-                        gyroX,
-                        gyroY,
-                        gyroZ,
-                    ),
+                    .format(accelX, accelY, accelZ, gyroX, gyroY, gyroZ),
             )
         }
     }

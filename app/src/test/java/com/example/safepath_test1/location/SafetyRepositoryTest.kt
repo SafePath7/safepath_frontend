@@ -38,11 +38,7 @@ class SafetyRepositoryTest {
 
     @Test
     fun nearbyFacilities_respectBoundsAndLimit() {
-        val nearby =
-            listOf(
-                SafetyFacility(37.5000, 127.0000),
-                SafetyFacility(37.5001, 127.0001),
-            )
+        val nearby = listOf(SafetyFacility(37.5000, 127.0000), SafetyFacility(37.5001, 127.0001))
         val distant = SafetyFacility(35.8572, 128.5712)
 
         val result =

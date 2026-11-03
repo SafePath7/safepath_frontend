@@ -46,18 +46,19 @@ object KakaoPlaceRepository {
 
             var connection: HttpURLConnection? = null
             try {
-                val parameters = buildList {
-                    add(
-                        "query=${URLEncoder.encode(normalizedQuery, StandardCharsets.UTF_8.name())}"
-                    )
-                    add("size=15")
-                    if (centerLatitude != null && centerLongitude != null) {
-                        add("x=$centerLongitude")
-                        add("y=$centerLatitude")
-                        add("sort=distance")
-                    }
-                }
-                    .joinToString("&")
+                val parameters =
+                    buildList {
+                            add(
+                                "query=${URLEncoder.encode(normalizedQuery, StandardCharsets.UTF_8.name())}"
+                            )
+                            add("size=15")
+                            if (centerLatitude != null && centerLongitude != null) {
+                                add("x=$centerLongitude")
+                                add("y=$centerLatitude")
+                                add("sort=distance")
+                            }
+                        }
+                        .joinToString("&")
                 connection =
                     URI.create("$ENDPOINT?$parameters").toURL().openConnection()
                         as HttpURLConnection

@@ -8,11 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-data class SafetyFacility(
-    val latitude: Double,
-    val longitude: Double,
-    val address: String = "",
-)
+data class SafetyFacility(val latitude: Double, val longitude: Double, val address: String = "")
 
 enum class SafetyLevel(
     val title: String,
@@ -37,12 +33,12 @@ object SafetyRepository {
     private const val tag = "SafetyRepository"
     private var cctvList: List<SafetyFacility>? = null
     private var streetlightList: List<SafetyFacility>? = null
+    // CSV는 한 번만 읽고 동시 요청에서도 캐시가 중복 생성되지 않도록 보호한다.
     private val cctvCacheLock = Mutex()
     private val streetlightCacheLock = Mutex()
 
-    suspend fun getCctvFacilities(context: Context): List<SafetyFacility> = cctvCacheLock.withLock {
-        cctvList ?: loadCctv(context).also { cctvList = it }
-    }
+    suspend fun getCctvFacilities(context: Context): List<SafetyFacility> =
+        cctvCacheLock.withLock { cctvList ?: loadCctv(context).also { cctvList = it } }
 
     suspend fun getStreetlightFacilities(context: Context): List<SafetyFacility> =
         streetlightCacheLock.withLock {
@@ -124,9 +120,8 @@ object SafetyRepository {
             val cctvs = getCctvFacilities(context)
             val lights = getStreetlightFacilities(context)
             if (cctvs.isEmpty() && lights.isEmpty()) return@withContext 0.0
-            // Most facilities are nowhere near the requested route. A cheap
-            // geographic bounding-box pass avoids comparing every one of the
-            // ~74k streetlights with every route segment.
+            // 경로 주변의 경계 상자로 시설을 먼저 추려 약 7만 4천 개의 가로등을
+            // 모든 경로 구간과 비교하는 비용을 줄인다.
             val cctvCandidates = facilitiesInsideRouteBounds(cctvs, routePoints, 50.0)
             val lightCandidates = facilitiesInsideRouteBounds(lights, routePoints, 40.0)
             val weightedFacilityCount =
@@ -141,7 +136,7 @@ object SafetyRepository {
         paddingMeters: Double,
     ): List<SafetyFacility> {
         if (route.isEmpty()) return emptyList()
-        val centerLatitude = route.map { it.latitude }.average()
+        val centerLatitude = route.sumOf { it.latitude } / route.size
         val latitudePadding = paddingMeters / 111_320.0
         val longitudeScale = (111_320.0 * cos(Math.toRadians(centerLatitude))).coerceAtLeast(1.0)
         val longitudePadding = paddingMeters / longitudeScale
@@ -154,9 +149,7 @@ object SafetyRepository {
         }
     }
 
-    /**
-     * Returns only facilities near a point, avoiding creation of tens of thousands of map labels.
-     */
+    /** 특정 지점 주변의 시설만 반환해 지도 라벨이 수만 개 생성되는 것을 방지한다. */
     internal fun facilitiesNearPoint(
         facilities: List<SafetyFacility>,
         latitude: Double,
@@ -178,14 +171,21 @@ object SafetyRepository {
             .toList()
     }
 
+    // 시설마다 구간 쌍 리스트를 만들지 않고 순회하며, 가까운 구간을 찾으면 즉시 종료한다.
     private fun isNearRoute(
         facility: SafetyFacility,
         route: List<SafetyFacility>,
         thresholdMeters: Double,
-    ): Boolean =
-        route.zipWithNext().any { (start, end) ->
-            distanceToSegmentMeters(facility, start, end) <= thresholdMeters
+    ): Boolean {
+        for (index in 0 until route.lastIndex) {
+            if (
+                distanceToSegmentMeters(facility, route[index], route[index + 1]) <= thresholdMeters
+            ) {
+                return true
+            }
         }
+        return false
+    }
 
     private fun distanceToSegmentMeters(
         point: SafetyFacility,
@@ -223,10 +223,7 @@ object SafetyRepository {
         return r * c
     }
 
-    // A minimal CSV splitter that respects double-quoted fields (so an
-    // address like "서울시, 강남구" doesn't get split into two extra
-    // columns and shift every value after it). Plain String.split(",")
-    // breaks on rows like that.
+    // 큰따옴표로 감싼 주소의 쉼표를 열 구분자로 처리하지 않도록 CSV를 분리한다.
     private fun parseCsvLine(line: String): List<String> {
         val result = mutableListOf<String>()
         val current = StringBuilder()
@@ -245,8 +242,7 @@ object SafetyRepository {
         return result
     }
 
-    // cctv.csv is distributed as CP949/EUC-KR (common for Korean public-data
-    // exports); reading it as UTF-8 silently garbles the address column.
+    // CCTV 공공데이터는 EUC-KR로 배포되므로 주소가 깨지지 않게 해당 인코딩으로 읽는다.
     private fun loadCctv(context: Context): List<SafetyFacility> {
         val list = mutableListOf<SafetyFacility>()
         try {
@@ -261,11 +257,7 @@ object SafetyRepository {
                             lat != null && lng != null && lat in 30.0..40.0 && lng in 120.0..135.0
                         ) {
                             list.add(
-                                SafetyFacility(
-                                    latitude = lat,
-                                    longitude = lng,
-                                    address = addr,
-                                )
+                                SafetyFacility(latitude = lat, longitude = lng, address = addr)
                             )
                         }
                     }
@@ -281,7 +273,7 @@ object SafetyRepository {
         val list = mutableListOf<SafetyFacility>()
         try {
             context.assets.open("streetlight.csv").bufferedReader().useLines { lines ->
-                lines.drop(1).forEachIndexed { index, line ->
+                lines.drop(1).forEach { line ->
                     val cols = parseCsvLine(line)
                     if (cols.size >= 3) {
                         val lat = cols[1].trim().toDoubleOrNull()
@@ -289,12 +281,7 @@ object SafetyRepository {
                         if (
                             lat != null && lng != null && lat in 30.0..40.0 && lng in 120.0..135.0
                         ) {
-                            list.add(
-                                SafetyFacility(
-                                    latitude = lat,
-                                    longitude = lng,
-                                )
-                            )
+                            list.add(SafetyFacility(latitude = lat, longitude = lng))
                         }
                     }
                 }

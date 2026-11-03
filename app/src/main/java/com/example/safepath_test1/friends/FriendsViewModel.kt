@@ -35,17 +35,19 @@ class FriendsViewModel(application: Application) : AndroidViewModel(application)
     private var accountId: String? = null
     private var submissionId = java.util.UUID.randomUUID().toString()
     private val auth = FirebaseAuth.getInstance()
-    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-        val next = firebaseAuth.currentUser?.uid
-        if (next != accountId) {
-            accountId = next
-            refreshJob?.cancel()
-            mutationJob?.cancel()
-            state.value = FriendsUiState(friends = readServerFriends(getApplication()))
-            submissionId = java.util.UUID.randomUUID().toString()
-            if (next != null) refresh()
+    // 계정이 바뀌면 이전 요청을 취소해 다른 계정의 결과가 화면에 섞이지 않게 한다.
+    private val authListener =
+        FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val next = firebaseAuth.currentUser?.uid
+            if (next != accountId) {
+                accountId = next
+                refreshJob?.cancel()
+                mutationJob?.cancel()
+                state.value = FriendsUiState(friends = readServerFriends(getApplication()))
+                submissionId = java.util.UUID.randomUUID().toString()
+                if (next != null) refresh()
+            }
         }
-    }
 
     init {
         auth.addAuthStateListener(authListener)
@@ -60,27 +62,31 @@ class FriendsViewModel(application: Application) : AndroidViewModel(application)
         )
             return
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            state.update { it.copy(isLoading = true) }
-            try {
-                val snapshot = repository.load()
-                state.update {
-                    it.copy(
-                        friends = snapshot.friends,
-                        received = snapshot.received,
-                        sent = snapshot.sent,
-                        isLoading = false,
-                        error = null,
-                    )
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                state.update {
-                    it.copy(isLoading = false, error = exception.message ?: "친구 목록을 불러오지 못했습니다.")
+        refreshJob =
+            viewModelScope.launch {
+                state.update { it.copy(isLoading = true) }
+                try {
+                    val snapshot = repository.load()
+                    state.update {
+                        it.copy(
+                            friends = snapshot.friends,
+                            received = snapshot.received,
+                            sent = snapshot.sent,
+                            isLoading = false,
+                            error = null,
+                        )
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = exception.message ?: "친구 목록을 불러오지 못했습니다.",
+                        )
+                    }
                 }
             }
-        }
     }
 
     fun create() = mutate {
@@ -103,19 +109,23 @@ class FriendsViewModel(application: Application) : AndroidViewModel(application)
         if (state.value.isSubmitting) return
         refreshJob?.cancel()
         state.update { it.copy(isSubmitting = true, isLoading = false, error = null) }
-        mutationJob = viewModelScope.launch {
-            try {
-                action()
-                state.update { it.copy(isSubmitting = false) }
-                refresh()
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                state.update {
-                    it.copy(isSubmitting = false, error = exception.message ?: "친구 요청을 처리하지 못했습니다.")
+        mutationJob =
+            viewModelScope.launch {
+                try {
+                    action()
+                    state.update { it.copy(isSubmitting = false) }
+                    refresh()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    state.update {
+                        it.copy(
+                            isSubmitting = false,
+                            error = exception.message ?: "친구 요청을 처리하지 못했습니다.",
+                        )
+                    }
                 }
             }
-        }
     }
 
     override fun onCleared() {

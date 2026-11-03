@@ -12,15 +12,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle =
-                SystemBarStyle.light(
-                    scrim = Color.TRANSPARENT,
-                    darkScrim = Color.TRANSPARENT,
-                ),
+                SystemBarStyle.light(scrim = Color.TRANSPARENT, darkScrim = Color.TRANSPARENT),
             navigationBarStyle =
-                SystemBarStyle.light(
-                    scrim = Color.TRANSPARENT,
-                    darkScrim = Color.TRANSPARENT,
-                ),
+                SystemBarStyle.light(scrim = Color.TRANSPARENT, darkScrim = Color.TRANSPARENT),
         )
         setContent { SafePathApp() }
     }

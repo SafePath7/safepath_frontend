@@ -27,11 +27,7 @@ class GoogleAuthManager(private val context: Context) {
 
             val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
 
-            val result =
-                credentialManager.getCredential(
-                    context = context,
-                    request = request,
-                )
+            val result = credentialManager.getCredential(context = context, request = request)
 
             val credential = result.credential
 
@@ -42,10 +38,7 @@ class GoogleAuthManager(private val context: Context) {
                 val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
 
                 val firebaseCredential =
-                    GoogleAuthProvider.getCredential(
-                        googleCredential.idToken,
-                        null,
-                    )
+                    GoogleAuthProvider.getCredential(googleCredential.idToken, null)
 
                 auth.signInWithCredential(firebaseCredential).await()
 

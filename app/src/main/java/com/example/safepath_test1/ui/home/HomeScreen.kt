@@ -1,6 +1,5 @@
 package com.example.safepath_test1.ui.home
 
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -65,7 +64,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -82,7 +80,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.safepath_test1.api.RetrofitClient
 import com.example.safepath_test1.location.KakaoPlace
 import com.example.safepath_test1.location.RouteResult
 import com.example.safepath_test1.model.GeoPoint
@@ -153,25 +150,11 @@ fun HomeScreen(
         if (destination.hasCoordinates()) GeoPoint(destination.latitude!!, destination.longitude!!)
         else null
 
-    LaunchedEffect(Unit) {
-        try {
-            val facilities = RetrofitClient.api.getFacilities()
-
-            facilities.forEach {
-                Log.d(
-                    "SAFEPATH_API",
-                    "${it.id} ${it.type} ${it.name} ${it.latitude} ${it.longitude}",
-                )
-            }
-        } catch (e: Exception) {
-            Log.e("SAFEPATH_API", "API 호출 실패: ${e.message}", e)
-        }
-    }
-
     LaunchedEffect(destination.name, isDestinationSearchOpen) {
         homeViewModel.searchPlaces(destination.name, isDestinationSearchOpen, currentLocation)
     }
 
+    // 출발지·목적지 변경 시 경로를 다시 조회하고 워치 상태도 함께 갱신한다.
     LaunchedEffect(origin, destination, destinationConfirmation) {
         inputError =
             if (destination.hasCoordinates() && !origin.hasCoordinates())
@@ -204,9 +187,7 @@ fun HomeScreen(
             else -> "#5FA8D3"
         }
 
-    // Keep the watch in sync with whichever route tab the user actually has
-    // selected (not hardcoded to the safe route), and re-send whenever they
-    // switch tabs after results are already loaded.
+    // 사용자가 선택한 경로를 워치와 동기화하고 결과 조회 후 경로를 바꾸면 다시 전송한다.
     LaunchedEffect(multiRouteResult, activeRoute, routeType) {
         if (multiRouteResult == null) return@LaunchedEffect
         val selectedType = RouteType.valueOf(routeType)
@@ -310,12 +291,6 @@ fun HomeScreen(
                     isDestinationSearchOpen = false
                     keyboardController?.hide()
                 },
-                selectedRouteType = RouteType.valueOf(routeType),
-                onRouteTypeSelected = { type ->
-                    coroutineScope.launch {
-                        routePagerState.animateScrollToPage(routeTypes.indexOf(type))
-                    }
-                },
                 onUseCurrentLocation = {
                     currentLocation?.let {
                         onOriginChanged(PlaceSelection("내 위치", it.latitude, it.longitude))
@@ -361,9 +336,7 @@ fun HomeScreen(
                 places = placeSearchResults,
                 isLoading = isPlaceSearchLoading,
                 errorMessage = placeSearchError,
-                onQueryChanged = { query ->
-                    onDestinationChanged(PlaceSelection(name = query))
-                },
+                onQueryChanged = { query -> onDestinationChanged(PlaceSelection(name = query)) },
                 onPlaceSelected = { place ->
                     destinationConfirmation++
 
@@ -384,7 +357,7 @@ fun HomeScreen(
                 modifier =
                     Modifier.align(Alignment.TopCenter)
                         .statusBarsPadding()
-                        .padding(top = 172.dp, start = 14.dp, end = 14.dp),
+                        .padding(top = 138.dp, start = 14.dp, end = 14.dp),
             )
         } else if (isRouteLoading || routeError != null || routeNotice != null) {
             val statusMessage = routeError ?: routeNotice ?: "안전 경로를 검색하고 있습니다."
@@ -393,7 +366,7 @@ fun HomeScreen(
                     Modifier.align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(
-                            top = if (stage == "routes") 78.dp else 172.dp,
+                            top = if (stage == "routes") 78.dp else 138.dp,
                             start = 24.dp,
                             end = 24.dp,
                         ),
@@ -436,14 +409,18 @@ fun HomeScreen(
                     Modifier.align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 108.dp),
+                        .padding(
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = if (stage == "routes") 108.dp else 80.dp,
+                        ),
                 shape = FloatingPanelShape,
                 color = Color.White,
                 shadowElevation = 6.dp,
             ) {
                 Column(
                     (if (stage == "routes") Modifier.heightIn(max = 430.dp)
-                        else Modifier.height(72.dp))
+                        else Modifier.height(144.dp))
                         .padding(
                             horizontal = 16.dp,
                             vertical = if (stage == "routes") 16.dp else 12.dp,
@@ -502,7 +479,8 @@ fun HomeScreen(
                                             coroutineScope.launch {
                                                 routePagerState.animateScrollToPage(index)
                                             }
-                                        }
+                                        },
+                                        modifier = Modifier.size(36.dp),
                                     ) {
                                         Icon(
                                             Icons.Default.Circle,
@@ -510,21 +488,11 @@ fun HomeScreen(
                                             tint =
                                                 if (routePagerState.settledPage == index) SafeBlue
                                                 else FieldBg,
-                                            modifier =
-                                                Modifier.size(
-                                                    if (routePagerState.settledPage == index) 8.dp
-                                                    else 6.dp
-                                                ),
+                                            modifier = Modifier.size(8.dp),
                                         )
                                     }
                                 }
                             }
-                            Text(
-                                "시간·안전점수·시설별 개수는 현재 데이터에 없습니다.",
-                                color = TextMuted,
-                                fontSize = 10.sp,
-                                lineHeight = 13.sp,
-                            )
                             if (routeNotice != null)
                                 Text(routeNotice, color = TextMuted, fontSize = 12.sp)
                         }
@@ -537,6 +505,27 @@ fun HomeScreen(
                             Text("이 경로로 출발 준비")
                         }
                     } else {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "자주 가는 곳",
+                                    color = TextMain,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                )
+                                Text("목적지를 빠르게 선택하세요", color = TextMuted, fontSize = 11.sp)
+                            }
+                            Icon(
+                                Icons.Default.Star,
+                                null,
+                                tint = SkyBlue,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -632,13 +621,11 @@ fun HomeScreen(
             modifier =
                 Modifier.align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(top = if (stage == "routes") 115.dp else 190.dp, end = 12.dp),
+                    .padding(top = if (stage == "routes") 115.dp else 155.dp, end = 12.dp),
             locationEnabled = hasLocationPermission,
             safetyFacilitiesEnabled = showSafetyFacilities,
             onRecenter = { recenterToken++ },
-            onToggleSafetyFacilities = {
-                showSafetyFacilities = !showSafetyFacilities
-            },
+            onToggleSafetyFacilities = { showSafetyFacilities = !showSafetyFacilities },
         )
     }
 }
@@ -653,7 +640,7 @@ private fun FavoriteShortcut(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(76.dp),
         shape = RoundedCornerShape(16.dp),
         color = if (outlined) Color.White else SafeBlue.copy(alpha = 0.06f),
         border = if (outlined) BorderStroke(1.dp, SkyBlue.copy(alpha = 0.35f)) else null,
@@ -712,11 +699,7 @@ private fun DestinationSearchPanel(
                 Spacer(Modifier.width(8.dp))
                 Box(modifier = Modifier.weight(1f)) {
                     if (query.isBlank()) {
-                        Text(
-                            text = "장소명이나 주소를 입력하세요",
-                            color = TextMuted,
-                            fontSize = 13.sp,
-                        )
+                        Text(text = "장소명이나 주소를 입력하세요", color = TextMuted, fontSize = 13.sp)
                     }
                     BasicTextField(
                         value = query,
@@ -762,10 +745,8 @@ private fun DestinationSearchPanel(
                 places.isEmpty() -> SearchMessage("검색 결과가 없습니다.")
                 else ->
                     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
-                        itemsIndexed(
-                            items = places,
-                            key = { _, place -> place.id },
-                        ) { index, place ->
+                        itemsIndexed(items = places, key = { _, place -> place.id }) { index, place
+                            ->
                             if (index > 0) {
                                 androidx.compose.material3.HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -847,108 +828,64 @@ private fun RouteSearchCard(
     onDestinationChanged: (PlaceSelection) -> Unit,
     onSwap: () -> Unit,
     onUseCurrentLocation: () -> Unit,
-    selectedRouteType: RouteType,
-    onRouteTypeSelected: (RouteType) -> Unit,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
         color = Color.White.copy(alpha = 0.98f),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier =
-                        Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(SafeBlue),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("S", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RouteFieldRow(
+                        leading = { Box(Modifier.size(9.dp).background(SkyBlue, CircleShape)) },
+                        isError = originError,
+                        value = origin.name,
+                        placeholder = "출발지 · 현재 위치",
+                        isSelected = activeTab == "origin",
+                        onSelect = { onActiveTabChanged("origin") },
+                        onValueChange = { onOriginChanged(PlaceSelection(name = it)) },
+                        trailing = {
+                            Icon(
+                                Icons.Default.MyLocation,
+                                "내 위치 설정",
+                                tint = SafeBlue,
+                                modifier = Modifier.size(24.dp).clickable { onUseCurrentLocation() },
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    RouteFieldRow(
+                        leading = {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                null,
+                                tint = SafeBlue,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        isError = destinationError,
+                        value = destination.name,
+                        placeholder = "어디로 가시나요?",
+                        isSelected = activeTab == "destination",
+                        onSelect = { onActiveTabChanged("destination") },
+                        onValueChange = { onDestinationChanged(PlaceSelection(name = it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "SafePath",
-                    color = TextMain,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RouteFieldRow(
-                    leading = {
-                        Box(modifier = Modifier.size(9.dp).clip(CircleShape).background(SafeBlue))
-                    },
-                    isError = originError,
-                    value = origin.name,
-                    placeholder = "내 위치",
-                    isSelected = activeTab == "origin",
-                    onSelect = { onActiveTabChanged("origin") },
-                    onValueChange = { onOriginChanged(PlaceSelection(name = it)) },
-                    trailing = {
-                        Surface(
-                            modifier =
-                                Modifier.size(26.dp).clickable {
-                                    onActiveTabChanged("origin")
-                                    onUseCurrentLocation()
-                                },
-                            shape = CircleShape,
-                            color = SafeBlue.copy(alpha = 0.12f),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.MyLocation,
-                                    contentDescription = "내 위치 설정",
-                                    tint = SafeBlue,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-
                 Surface(
                     modifier =
-                        Modifier.padding(horizontal = 6.dp).size(36.dp).clickable(onClick = onSwap),
+                        Modifier.padding(start = 8.dp).size(40.dp).clickable(onClick = onSwap),
                     shape = CircleShape,
                     color = FieldBg,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "스왑",
-                            tint = SafeBlue,
-                            modifier = Modifier.size(20.dp),
-                        )
+                        Icon(Icons.Default.Refresh, "출발지와 도착지 바꾸기", tint = SafeBlue)
                     }
                 }
-
-                RouteFieldRow(
-                    leading = {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "도착지",
-                            tint = DestRed,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
-                    isError = destinationError,
-                    value = destination.name,
-                    placeholder = "도착지",
-                    isSelected = activeTab == "destination",
-                    onSelect = { onActiveTabChanged("destination") },
-                    onValueChange = { onDestinationChanged(PlaceSelection(name = it)) },
-                    modifier = Modifier.weight(1f),
-                )
             }
 
             if (originError)
@@ -963,23 +900,6 @@ private fun RouteSearchCard(
                     color = com.example.safepath_test1.ui.theme.DangerRed,
                     fontSize = 11.sp,
                 )
-
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(FieldBg)
-                        .padding(3.dp)
-            ) {
-                RouteType.entries.forEach { type ->
-                    RouteTypeChip(
-                        type = type,
-                        selected = type == selectedRouteType,
-                        onClick = { onRouteTypeSelected(type) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
         }
     }
 }
@@ -1028,10 +948,7 @@ private fun RouteFieldRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier.size(16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Box(modifier = Modifier.size(16.dp), contentAlignment = Alignment.Center) {
                     leading()
                 }
                 Spacer(Modifier.width(6.dp))
@@ -1078,46 +995,6 @@ private fun RouteFieldRow(
 }
 
 @Composable
-private fun RouteTypeChip(
-    type: RouteType,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val background = if (selected) SafeBlue else Color.Transparent
-    val content = if (selected) Color.White else TextMuted
-    Row(
-        modifier =
-            modifier
-                .height(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(background)
-                .clickable(onClick = onClick),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = type.icon,
-            contentDescription = type.title,
-            tint = content,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(5.dp))
-        Text(
-            text =
-                when (type) {
-                    RouteType.Safe -> "안전"
-                    RouteType.Shortest -> "최단"
-                    RouteType.Recommended -> "추천"
-                },
-            color = content,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
 private fun MapSideControls(
     modifier: Modifier,
     locationEnabled: Boolean,
@@ -1125,10 +1002,7 @@ private fun MapSideControls(
     onRecenter: () -> Unit,
     onToggleSafetyFacilities: () -> Unit,
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         RoundMapButton(
             icon = Icons.Default.LocationOn,
             enabled = locationEnabled,
@@ -1190,11 +1064,11 @@ private fun RouteOptionCard(
         }
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(enabled = route != null, onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (selected) FieldBg else Color.White,
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) Color(0xFFF3F8FA) else Color.White,
         border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) lineColor else FieldBg),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(16.dp).height(4.dp).background(lineColor, CircleShape))
                 Text(
@@ -1213,7 +1087,7 @@ private fun RouteOptionCard(
                     fontSize = 12.sp,
                 )
             }
-            // Repository score is facility density, not a calibrated 0..100 safety score.
+            // 저장소의 점수는 시설 밀도이며 0~100으로 보정된 안전 점수가 아니다.
             Text(
                 route?.let {
                     String.format(
@@ -1244,11 +1118,11 @@ private fun RouteOptionCard(
 
 private fun readFavorite(prefs: android.content.SharedPreferences, label: String): PlaceSelection? =
     runCatching {
-        val raw = prefs.getString("favorite_$label", null) ?: return null
-        val item = org.json.JSONObject(raw)
-        val lat = item.getDouble("lat")
-        val lng = item.getDouble("lng")
-        if (lat.isFinite() && lng.isFinite()) PlaceSelection(item.getString("name"), lat, lng)
-        else null
-    }
-    .getOrNull()
+            val raw = prefs.getString("favorite_$label", null) ?: return null
+            val item = org.json.JSONObject(raw)
+            val lat = item.getDouble("lat")
+            val lng = item.getDouble("lng")
+            if (lat.isFinite() && lng.isFinite()) PlaceSelection(item.getString("name"), lat, lng)
+            else null
+        }
+        .getOrNull()

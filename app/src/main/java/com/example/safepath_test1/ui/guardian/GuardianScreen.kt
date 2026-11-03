@@ -18,7 +18,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -44,7 +46,7 @@ import com.example.safepath_test1.ui.theme.*
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 
-// Existing local contacts are retained; these are not server-accepted friendships.
+// 기존 로컬 연락처는 유지하며, 서버에서 수락된 친구 관계와 구분한다.
 data class FriendshipRequest(
     val id: String,
     val name: String,
@@ -58,25 +60,26 @@ data class GuardianItem(
     val phone: String,
 )
 
-private fun readLocalGuardians(context: Context): List<GuardianItem> = runCatching {
-    val data =
-        JSONArray(
-            context
-                .getSharedPreferences("safe_path_guardians", Context.MODE_PRIVATE)
-                .getString("guardian_list", "[]")
-        )
-    (0 until data.length()).map { i ->
-        data.getJSONObject(i).let {
-            GuardianItem(
-                it.optString("id"),
-                it.optString("name"),
-                it.optString("relationship"),
-                it.optString("phone"),
-            )
+private fun readLocalGuardians(context: Context): List<GuardianItem> =
+    runCatching {
+            val data =
+                JSONArray(
+                    context
+                        .getSharedPreferences("safe_path_guardians", Context.MODE_PRIVATE)
+                        .getString("guardian_list", "[]")
+                )
+            (0 until data.length()).map { i ->
+                data.getJSONObject(i).let {
+                    GuardianItem(
+                        it.optString("id"),
+                        it.optString("name"),
+                        it.optString("relationship"),
+                        it.optString("phone"),
+                    )
+                }
+            }
         }
-    }
-}
-    .getOrDefault(emptyList())
+        .getOrDefault(emptyList())
 
 fun readGuardians(context: Context): List<GuardianItem> =
     (readLocalGuardians(context) + readServerFriends(context)).distinctBy { it.id }
@@ -160,7 +163,7 @@ fun FriendsScreen(
     Column(
         modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding()
             .padding(horizontal = 20.dp)
@@ -533,10 +536,14 @@ fun GuardianScreen(modifier: Modifier = Modifier, journeys: List<ProtectedJourne
         return
     }
     Column(
-        modifier.fillMaxSize().background(Color.White).padding(20.dp),
+        modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        PageHeader("보호 중", "나를 보호자로 선택한 사람의 귀가를 확인해요")
+        PageHeader("보호", "나를 보호자로 선택한 사람의 귀가를 확인해요")
         journeys.forEachIndexed { index, journey ->
             OutlinedButton(
                 shape = MaterialTheme.shapes.small,
@@ -567,6 +574,21 @@ fun GuardianScreen(modifier: Modifier = Modifier, journeys: List<ProtectedJourne
                     Text("보호 세션이 연결되면 사용자 위치와 상태를 여기에 표시합니다.", color = TextMuted)
                 }
             }
+        Text("최근 귀가 기록", style = MaterialTheme.typography.titleMedium)
+        Surface(
+            color = Color.White,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("표시할 귀가 기록이 없어요", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "귀가 기록 조회 기능은 아직 연결되지 않았어요.",
+                    color = TextMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 
@@ -650,11 +672,13 @@ fun DepartureScreen(
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
+            // 실제 입력 필드는 숨기고 네 칸의 점만 그려 비밀번호 노출을 막는다.
             BasicTextField(
                 value = pin,
                 onValueChange = { pin = it.filter { char -> char in '0'..'9' }.take(4) },
                 singleLine = true,
                 textStyle = TextStyle(color = Color.Transparent),
+                cursorBrush = SolidColor(Color.Transparent),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -680,7 +704,7 @@ fun DepartureScreen(
                                 }
                             }
                         }
-                        Box(Modifier.fillMaxWidth().height(56.dp)) { inner() }
+                        Box(Modifier.fillMaxWidth().height(56.dp).alpha(0f)) { inner() }
                     }
                 },
             )

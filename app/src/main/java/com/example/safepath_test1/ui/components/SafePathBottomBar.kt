@@ -11,7 +11,7 @@ import com.example.safepath_test1.ui.SafePathTab
 import com.example.safepath_test1.ui.theme.SafeBlue
 import com.example.safepath_test1.ui.theme.TextMuted
 
-val FloatingPanelShape = RoundedCornerShape(24.dp)
+val FloatingPanelShape = RoundedCornerShape(22.dp)
 
 @Composable
 fun SafePathBottomBar(
@@ -20,17 +20,13 @@ fun SafePathBottomBar(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        shape = FloatingPanelShape,
+        modifier = modifier.fillMaxWidth().navigationBarsPadding(),
+        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp),
         color = Color.White,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         NavigationBar(
-            modifier = Modifier.height(72.dp),
+            modifier = Modifier.height(68.dp),
             windowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = Color.White,
             tonalElevation = 0.dp,
@@ -47,7 +43,7 @@ fun SafePathBottomBar(
                         NavigationBarItemDefaults.colors(
                             selectedIconColor = SafeBlue,
                             selectedTextColor = SafeBlue,
-                            indicatorColor = SafeBlue.copy(alpha = .08f),
+                            indicatorColor = SafeBlue.copy(alpha = .10f),
                             unselectedIconColor = TextMuted,
                             unselectedTextColor = TextMuted,
                         ),

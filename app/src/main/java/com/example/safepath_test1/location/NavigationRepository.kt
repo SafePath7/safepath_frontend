@@ -86,9 +86,8 @@ object NavigationRepository {
         }
 
     /**
-     * Chooses routes on comparable 0..1 scales. Raw facility density can be much larger than the
-     * old fixed detour penalties, which previously made both "safe" and "recommended" almost always
-     * choose the same candidate.
+     * 시설 밀도와 우회 정도를 비교 가능한 0~1 범위로 정규화해 경로를 선택한다.
+     * 원래 시설 밀도가 고정 우회 점수보다 지나치게 커 두 추천 결과가 같아지는 문제를 방지한다.
      */
     internal fun selectRoutes(candidates: List<RouteResult>): MultiRouteResult {
         if (candidates.isEmpty()) return MultiRouteResult(null, null, null)
@@ -123,8 +122,8 @@ object NavigationRepository {
         fun distance(route: RouteResult) =
             1.0 - normalized(route.distanceMeters, minDistance, maxDistance)
 
-        // Safe strongly favors facility coverage; recommended balances safety
-        // and walking distance. Shortest remains a pure distance choice.
+        // 안전 경로는 시설 밀도를 우선하고 추천 경로는 안전과 거리를 함께 고려한다.
+        // 최단 경로는 거리만 기준으로 선택한다.
         val safeRoute =
             candidates.maxByOrNull { safety(it) * 0.8 + distance(it) * 0.2 } ?: shortestRoute
         val recommendedRoute =

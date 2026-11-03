@@ -11,16 +11,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val SafeBlue = Color(0xFF1B4965)
-val SkyBlue = Color(0xFF5FA8D3)
+val SafeBlue = Color(0xFF17445E)
+val SkyBlue = Color(0xFF63A9CC)
 val SafeGreen = Color(0xFF16A36A)
-val DestRed = Color(0xFF1B4965)
+val DestRed = Color(0xFF17445E)
 val DangerRed = Color(0xFFDC2626)
-val FieldBg = Color(0xFFF1F5F9)
-val TextMuted = Color(0xFF64748B)
-val TextMain = Color(0xFF0F172A)
-val AppBackground = Color(0xFFF8FAFC)
-val AppBorder = Color(0xFFE2E8F0)
+val FieldBg = Color(0xFFEEF4F6)
+val TextMuted = Color(0xFF647985)
+val TextMain = Color(0xFF172D39)
+val AppBackground = Color(0xFFF6F9FA)
+val AppBorder = Color(0xFFDCE8EC)
 
 private val LightColors =
     lightColorScheme(
@@ -38,11 +38,7 @@ private val SafePathTypography =
         headlineLarge =
             Typography()
                 .headlineLarge
-                .copy(
-                    fontSize = 24.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
+                .copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
         titleLarge = Typography().titleLarge.copy(fontWeight = FontWeight.Bold),
         titleMedium = Typography().titleMedium.copy(fontWeight = FontWeight.SemiBold),
         bodyMedium = Typography().bodyMedium.copy(lineHeight = 21.sp),

@@ -4,7 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 
-/** Launches KakaoTalk's recipient selector; launching does not confirm delivery. */
+/** 카카오톡 수신자 선택 화면을 열며, 실제 전송 완료 여부는 확인하지 않는다. */
 fun shareFriendInvite(context: Context, invite: CreatedFriendInvite): String? {
     val intent =
         Intent(Intent.ACTION_SEND).apply {

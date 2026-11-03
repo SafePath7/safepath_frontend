@@ -6,18 +6,9 @@ import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 
 /**
- * Sends route status updates to the paired Wear OS watch over the Play Services Wearable Data
- * Layer's DataClient, now that the wear module's applicationId matches the phone module's (see
- * wear/build.gradle.kts).
- *
- * Uses DataClient (PutDataMapRequest/putDataItem) rather than MessageClient: MessageClient's
- * sendMessage() kept failing on real-device testing with "Failed to deliver message to AppKey" from
- * Google Play Services' WearableService, while DataClient + matching applicationId is the
- * combination confirmed working real-device + real-device.
- *
- * DataClient dedupes identical payloads (no event fires if nothing in the DataMap changed), so
- * `updatedAt` is always included to force a fresh item on every call even if state/route are
- * unchanged.
+ * 동일한 applicationId를 사용하는 휴대폰과 워치 사이에 DataClient로 경로 상태를 전송한다.
+ * MessageClient는 실기기에서 전송 오류가 발생해, 실기기에서 확인된 DataClient를 사용한다.
+ * 동일한 데이터는 중복 전송되지 않으므로 매 호출마다 updatedAt을 포함한다.
  */
 object WearMessenger {
     private const val TAG = "WearMessenger"
@@ -48,9 +39,7 @@ object WearMessenger {
                     "DataClient synced state=$state routeType=$routeType destination=$destinationName",
                 )
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "DataClient sync failed for state=$state", e)
-            }
+            .addOnFailureListener { e -> Log.e(TAG, "DataClient sync failed for state=$state", e) }
     }
 
     fun sendIdle(context: Context) {

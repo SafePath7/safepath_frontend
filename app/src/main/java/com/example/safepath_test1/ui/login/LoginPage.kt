@@ -2,9 +2,11 @@ package com.example.safepath_test1.ui.login
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,12 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.safepath_test1.auth.GoogleAuthManager
 import com.example.safepath_test1.ui.theme.*
 import kotlinx.coroutines.launch
@@ -32,13 +36,19 @@ fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier) {
     val auth = remember { GoogleAuthManager(context) }
     var busy by remember { mutableStateOf(false) }
     Column(
-        modifier.fillMaxSize().background(Color.White).systemBarsPadding().padding(24.dp),
+        modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFFEAF4F7), Color.White, Color.White)))
+            .systemBarsPadding()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.weight(1f))
         Surface(
-            shape = MaterialTheme.shapes.large,
-            color = FieldBg,
+            shape = CircleShape,
+            color = Color.White,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, AppBorder),
             modifier = Modifier.size(112.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -46,12 +56,18 @@ fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
         Spacer(Modifier.height(24.dp))
-        Text("Safe Path", style = MaterialTheme.typography.headlineLarge, color = SafeBlue)
+        Text(
+            "SAFE PATH",
+            style = MaterialTheme.typography.headlineLarge,
+            color = SafeBlue,
+            letterSpacing = 2.sp,
+        )
         Spacer(Modifier.height(8.dp))
-        Text("밤길, 혼자 걷지 않도록", color = TextMuted)
+        Text("안심하고 걷는 모든 순간", color = TextMuted)
         Spacer(Modifier.weight(1f))
         OutlinedButton(
-            shape = MaterialTheme.shapes.small,
+            shape = MaterialTheme.shapes.medium,
+            border = BorderStroke(1.dp, AppBorder),
             onClick = {
                 scope.launch {
                     busy = true

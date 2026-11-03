@@ -16,7 +16,7 @@ import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.ui.map.SafePathKakaoMapView
 import com.example.safepath_test1.ui.theme.*
 
-// Only pass sessions authorized for the signed-in guardian. No fabricated sessions in production.
+// 로그인한 보호자에게 허용된 세션만 전달하며 실제 운영 화면에 임의의 세션을 넣지 않는다.
 data class ProtectedJourney(
     val userName: String,
     val lastUpdated: String,

@@ -28,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -73,11 +74,7 @@ fun SafePathApp() {
         if (needsSignup) {
             SignupScreen(onComplete = { profileVersion++ }, onBack = { auth.signOut() })
         } else if (firebaseUser != null) {
-            SafePathMain(
-                onLogout = {
-                    auth.signOut()
-                }
-            )
+            SafePathMain(onLogout = { auth.signOut() })
         } else {
             LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser })
         }
@@ -97,9 +94,7 @@ private fun SafePathMain(onLogout: () -> Unit) {
     var showSosConfirmation by rememberSaveable { mutableStateOf(false) }
     var preparedInvite by remember { mutableStateOf<CreatedFriendInvite?>(null) }
     var shareError by remember { mutableStateOf<String?>(null) }
-    var hasLocationPermission by remember {
-        mutableStateOf(isLocationPermissionGranted(context))
-    }
+    var hasLocationPermission by remember { mutableStateOf(isLocationPermissionGranted(context)) }
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             result ->
@@ -129,21 +124,21 @@ private fun SafePathMain(onLogout: () -> Unit) {
             }
             val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
 
-            // Request each provider independently: on devices where only "approximate"
-            // (COARSE) location was granted, GPS_PROVIDER throws SecurityException — that
-            // used to abort NETWORK_PROVIDER too since both were inside one try block.
-            val lastKnownLocations = providers.mapNotNull { provider ->
-                try {
-                    locationManager.getLastKnownLocation(provider)
-                } catch (exception: SecurityException) {
-                    Log.w(
-                        "SafePathApp",
-                        "No permission to read last known location from $provider",
-                        exception,
-                    )
-                    null
+            // 대략적인 위치만 허용된 경우 GPS 요청이 실패해도 네트워크 위치를 요청하도록
+            // 각 위치 제공자를 독립적으로 처리한다.
+            val lastKnownLocations =
+                providers.mapNotNull { provider ->
+                    try {
+                        locationManager.getLastKnownLocation(provider)
+                    } catch (exception: SecurityException) {
+                        Log.w(
+                            "SafePathApp",
+                            "No permission to read last known location from $provider",
+                            exception,
+                        )
+                        null
+                    }
                 }
-            }
             lastKnownLocations
                 .maxByOrNull { location -> location.time }
                 ?.let { location ->
@@ -173,7 +168,11 @@ private fun SafePathMain(onLogout: () -> Unit) {
     val tab = SafePathTab.entries.find { it.name == selectedTab } ?: SafePathTab.Home
     BackHandler(enabled = tab != SafePathTab.Home) { selectedTab = SafePathTab.Home.name }
 
-    Box(modifier = Modifier.fillMaxSize().background(AppBackground)) {
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(if (tab == SafePathTab.Home) Color.White else AppBackground)
+    ) {
         when (tab) {
             SafePathTab.Home ->
                 HomeScreen(
@@ -329,12 +328,8 @@ private val placeSelectionSaver =
     )
 
 private fun isLocationPermissionGranted(context: android.content.Context): Boolean {
-    return ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-    ) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
 }

@@ -1,6 +1,6 @@
 package com.example.safepath_test1.friends
 
-/** Korean mobile numbers are stored consistently for the requester's profile. */
+/** 요청자의 국내 휴대전화 번호를 일관된 형식으로 변환한다. */
 fun normalizeFriendPhone(value: String): String? {
     val text = value.trim()
     if (text.any { !it.isDigit() && it !in " +()-" }) return null

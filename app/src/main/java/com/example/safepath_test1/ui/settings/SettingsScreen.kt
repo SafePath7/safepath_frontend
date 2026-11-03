@@ -64,8 +64,8 @@ fun SettingsScreen(
     val versionName =
         remember(context) {
             runCatching {
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName
-            }
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                }
                 .getOrNull() ?: "-"
         }
 
@@ -142,9 +142,7 @@ fun SettingsScreen(
                     "기존 보호자와 설정 정보는 이 기기에 저장됩니다. 친구 요청을 보내면 이름·연락처·요청 상태가 Firebase 서버에서 처리되고 카카오톡에서 직접 선택한 대상에게 요청 링크를 공유합니다. 링크 수락 시 Google 계정으로 로그인하며 연결된 친구 목록은 서버에 저장됩니다. 장소 검색어와 중심 좌표는 Kakao에, 출발지·도착지 좌표는 Mapbox에 전송됩니다. Google 로그인 시 계정 인증 정보는 Google과 Firebase에서 처리됩니다. 위치 공유는 사용자가 공유 화면에서 앱과 대상을 선택한 경우에만 실행됩니다."
                 )
             },
-            confirmButton = {
-                TextButton(onClick = { showDataUsage = false }) { Text("확인") }
-            },
+            confirmButton = { TextButton(onClick = { showDataUsage = false }) { Text("확인") } },
         )
     }
 }
@@ -173,10 +171,7 @@ private fun SettingsGroup(rows: List<Triple<String, Boolean, (Boolean) -> Unit>>
                     Switch(checked = row.second, onCheckedChange = row.third)
                 }
                 if (index < rows.lastIndex) {
-                    HorizontalDivider(
-                        Modifier.padding(start = 18.dp),
-                        color = AppBorder,
-                    )
+                    HorizontalDivider(Modifier.padding(start = 18.dp), color = AppBorder)
                 }
             }
         }
@@ -184,11 +179,7 @@ private fun SettingsGroup(rows: List<Triple<String, Boolean, (Boolean) -> Unit>>
 }
 
 @Composable
-private fun SettingsLinkRow(
-    title: String,
-    value: String,
-    onClick: (() -> Unit)? = null,
-) {
+private fun SettingsLinkRow(title: String, value: String, onClick: (() -> Unit)? = null) {
     Row(
         modifier =
             Modifier.fillMaxWidth()

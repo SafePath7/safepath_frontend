@@ -4,61 +4,25 @@ import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.edit
+import com.example.safepath_test1.ui.guardian.readGuardians
 import com.example.safepath_test1.ui.settings.SettingsScreen
-import com.example.safepath_test1.ui.theme.AppBorder
-import com.example.safepath_test1.ui.theme.FieldBg
-import com.example.safepath_test1.ui.theme.SafeBlue
-import com.example.safepath_test1.ui.theme.TextMain
-import com.example.safepath_test1.ui.theme.TextMuted
-import org.json.JSONArray
+import com.example.safepath_test1.ui.theme.*
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun ProfileScreen(
@@ -68,7 +32,6 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
 ) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
-
     BackHandler(enabled = showSettings) { showSettings = false }
     if (showSettings) {
         SettingsScreen(
@@ -76,284 +39,162 @@ fun ProfileScreen(
             onBack = { showSettings = false },
             modifier = modifier,
         )
-    } else {
-        ProfileContent(
-            onOpenSettings = { showSettings = true },
-            onLogout = onLogout,
-            onSosClick = onSosClick,
-            modifier = modifier,
-        )
+        return
     }
-}
-
-@Composable
-private fun ProfileContent(
-    onOpenSettings: () -> Unit,
-    onLogout: () -> Unit,
-    onSosClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
     val context = LocalContext.current
-    val prefs =
-        remember(context) {
-            context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE)
-        }
-
-    var guardianCount by remember { mutableIntStateOf(0) }
-    var guardianNames by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        val gPrefs = context.getSharedPreferences("safe_path_guardians", Context.MODE_PRIVATE)
-        val jsonString = gPrefs.getString("guardian_list", "[]") ?: "[]"
-        try {
-            val array = JSONArray(jsonString)
-            guardianCount = array.length()
-            if (guardianCount > 0) {
-                val first = array.optJSONObject(0)?.optString("name", "") ?: ""
-                guardianNames = if (guardianCount > 1) "${first} 외 ${guardianCount - 1}명" else first
-            } else {
-                guardianNames = "없음"
-            }
-        } catch (exception: org.json.JSONException) {
-            android.util.Log.e(
-                "ProfileScreen",
-                "Failed to parse guardian list; resetting it",
-                exception,
-            )
-            gPrefs.edit { remove("guardian_list") }
-            guardianCount = 0
-            guardianNames = "없음"
-        }
-    }
-
-    val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-    var userName by remember {
-        mutableStateOf(prefs.getString("user_name", null) ?: firebaseUser?.displayName ?: "게스트 사용자")
-    }
-    var userPhone by remember {
-        mutableStateOf(prefs.getString("user_phone", null) ?: firebaseUser?.email ?: "등록되지 않음")
-    }
-    var emergencyContact by remember {
-        mutableStateOf(prefs.getString("emergency_contact", null) ?: "등록되지 않음")
-    }
-
+    val prefs = remember { context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE) }
+    val user = FirebaseAuth.getInstance().currentUser
+    val name = prefs.getString("user_name", null) ?: user?.displayName ?: "사용자"
+    val phone = prefs.getString("user_phone", null) ?: "전화번호 미등록"
+    val friends = remember { readGuardians(context).size }
     Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Header with Settings Gear Button in Top-Right
-        Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "내 정보",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = TextMain,
-                )
-                Text(
-                    text = "계정과 안전 설정을 관리하세요",
-                    color = TextMuted,
-                    fontSize = 14.sp,
-                )
-            }
-
-            Surface(
-                modifier = Modifier.size(48.dp).clickable(onClick = onOpenSettings),
-                shape = CircleShape,
-                color = FieldBg,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = "설정",
-                        tint = TextMain,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "내 정보",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineLarge,
+                color = TextMain,
+            )
+            TextButton(onClick = onLogout) { Text("로그아웃", color = TextMuted) }
         }
-
-        // Profile Main Card
-        Card(
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier =
-                            Modifier.size(56.dp)
-                                .clip(CircleShape)
-                                .background(SafeBlue.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center,
+                    Surface(
+                        shape = CircleShape,
+                        color = SafeBlue,
+                        modifier = Modifier.size(52.dp),
                     ) {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = SafeBlue,
-                            modifier = Modifier.size(32.dp),
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                name.take(1),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text(phone, color = TextMuted, fontSize = 12.sp)
+                        Text(
+                            if (user != null) "Google 계정 연결됨" else "계정 미연결",
+                            color = TextMuted,
+                            fontSize = 12.sp,
                         )
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = userName,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextMain,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = SafeBlue.copy(alpha = 0.1f),
-                            ) {
-                                Text(
-                                    text = "안심 회원",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    color = SafeBlue,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = userPhone,
-                            fontSize = 13.sp,
-                            color = TextMuted,
-                        )
+                    OutlinedButton(
+                        onClick = { showSettings = true },
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                    ) {
+                        Text("설정")
                     }
                 }
-
-                HorizontalDivider(color = AppBorder)
-
-                InfoRow(label = "비상 연락처", value = emergencyContact)
-                InfoRow(label = "계정", value = if (firebaseUser != null) "Google 로그인" else "둘러보기")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProfileStat("$friends", "연결된 친구", Modifier.weight(1f))
+                    ProfileStat("—", "보호 중", Modifier.weight(1f))
+                }
             }
         }
-
-        // Quick Safety Status Card
-        Text(
-            text = "안심 연결 상태",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextMain,
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-        )
-
-        Card(
+        Text("AI 위험 감지", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column {
-                StatusItemRow(
-                    icon = Icons.Filled.Person,
-                    title = "연결된 보호자",
-                    status =
-                        if (guardianCount > 0) "${guardianCount}명 연결됨 ($guardianNames)"
-                        else "보호자 없음",
-                    isPositive = guardianCount > 0,
-                )
-                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
-                StatusItemRow(
-                    icon = Icons.Filled.LocationOn,
-                    title = "위치 공유",
-                    status = "사용자 선택 시 공유",
-                    isPositive = true,
-                )
-                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
-                StatusItemRow(
-                    icon = Icons.Filled.Info,
-                    title = "워치 상태 전송",
-                    status = "경로 선택 시 전송",
-                    isPositive = true,
-                )
+                listOf("위험 음성 감지", "위험 음향 감지", "격한 움직임 감지", "경로 이탈 알림").forEachIndexed {
+                    index,
+                    title ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .heightIn(min = 68.dp)
+                            .padding(start = 16.dp, end = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            title,
+                            modifier = Modifier.weight(1f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Switch(checked = false, onCheckedChange = null, enabled = false)
+                    }
+                    if (index < 3)
+                        HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
+                }
             }
         }
-
+        Text("감지 설정은 아직 연결되지 않았어요.", color = TextMuted, fontSize = 12.sp)
+        Text("귀가 설정", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                ProfileSetting("응답 대기 시간", "연결 예정")
+                HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
+                ProfileSetting("즐겨찾는 장소", "홈에서 관리")
+                HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
+                ProfileSetting(
+                    "앱 권한",
+                    if (hasLocationPermission) "위치 ›" else "허용된 권한 없음 ›",
+                    valueColor = if (hasLocationPermission) SafeGreen else TextMuted,
+                ) {
+                    showSettings = true
+                }
+            }
+        }
         Button(
             onClick = onSosClick,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth(0.5f).align(Alignment.CenterHorizontally),
             colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = com.example.safepath_test1.ui.theme.DangerRed
-                ),
+                ButtonDefaults.buttonColors(containerColor = DangerRed, contentColor = Color.White),
+            contentPadding = PaddingValues(horizontal = 8.dp),
         ) {
-            Text("SOS · 긴급 위치 공유")
-        }
-
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth(),
-            colors =
-                ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = TextMain),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Text("로그아웃")
+            Text("SOS", maxLines = 1, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text = label, color = TextMuted, fontSize = 13.sp, modifier = Modifier.weight(0.4f))
-        Text(
-            text = value,
-            color = TextMain,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(0.6f),
-        )
+private fun ProfileStat(value: String, label: String, modifier: Modifier = Modifier) {
+    Surface(modifier = modifier, color = FieldBg, shape = RoundedCornerShape(10.dp)) {
+        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, color = SafeBlue, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(label, color = TextMuted, fontSize = 12.sp)
+        }
     }
 }
 
 @Composable
-private fun StatusItemRow(
-    icon: ImageVector,
+private fun ProfileSetting(
     title: String,
-    status: String,
-    isPositive: Boolean,
+    value: String,
+    valueColor: Color = TextMuted,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 16.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = title, tint = SafeBlue, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextMain,
-        )
-        Text(
-            text = status,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(1f),
-            fontWeight = FontWeight.SemiBold,
-            color = if (isPositive) SafeBlue else TextMuted,
-        )
+        Text(title, modifier = Modifier.weight(1f), fontSize = 14.sp)
+        Text(value, color = valueColor, fontSize = 12.sp)
     }
 }
