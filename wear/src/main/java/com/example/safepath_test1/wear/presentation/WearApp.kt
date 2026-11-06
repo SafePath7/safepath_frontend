@@ -2,12 +2,16 @@ package com.example.safepath_test1.wear.presentation
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -28,6 +33,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
+import com.example.safepath_test1.wear.sensors.WatchSosSender
 import com.example.safepath_test1.wear.sensors.WatchVoiceRecorder
 import com.example.safepath_test1.wear.sensors.WatchVoiceSender
 import com.google.android.gms.wearable.DataClient
@@ -117,7 +123,7 @@ fun WearApp() {
     // actually picking up sound" indicator is easy to notice at a glance (a small dot wasn't).
     val audioLevel by voiceRecorder.audioLevel.collectAsState()
     val screenTint =
-        if (isNavigating) lerp(Color.Black, Color(0xFFA5D6A7), audioLevel) else Color.Black
+        if (isNavigating) lerp(Color(0xFF14233B), Color(0xFFA5D6A7), audioLevel) else Color.Black
 
     fun applyDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
         val updatedAt = dataMap.getLong("updatedAt")
@@ -226,27 +232,81 @@ fun WearApp() {
                         Text(text = "탐색 중...", textAlign = TextAlign.Center)
                     }
                     is RouteStatus.Found -> {
-                        routeMap?.let { map ->
-                            RouteMiniMap(
-                                routePoints = map.points,
-                                destination = map.destination,
-                                current = map.current,
+                        Row(
+                            modifier =
+                                Modifier.clip(RoundedCornerShape(50))
+                                    .background(Color(0xFF26405C))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF4ADE80))
                             )
-                        }
-                        Text(text = "✅ ${current.routeType}", textAlign = TextAlign.Center)
-                        Text(text = "${current.distanceKm} km", textAlign = TextAlign.Center)
-                        current.destinationName?.let {
                             Text(
-                                text = it,
-                                textAlign = TextAlign.Center,
+                                text = "  이동중",
                                 style = MaterialTheme.typography.caption2,
+                                color = Color.White,
                             )
                         }
+                        routeMap?.let { map ->
+                            Box(
+                                modifier =
+                                    Modifier.clip(RoundedCornerShape(16.dp))
+                                        .background(Color(0xFF1C3350))
+                                        .padding(4.dp)
+                            ) {
+                                RouteMiniMap(
+                                    routePoints = map.points,
+                                    destination = map.destination,
+                                    current = map.current,
+                                )
+                            }
+                        }
+                        Text(
+                            text = current.destinationName ?: current.routeType,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.title3,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "${current.distanceKm}km",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.caption2,
+                            color = Color(0xFF9AA5B1),
+                        )
                     }
                     RouteStatus.Stale -> {
                         Text(text = "⏱️ 연결 끊김", textAlign = TextAlign.Center)
                         Text(text = "폰과 블루투스 연결을 확인하세요", textAlign = TextAlign.Center)
                     }
+                }
+            }
+
+            // Pinned to the screen's own bottom-center rather than laid out inside the Column
+            // above, so it can't get pushed off-screen by how much the rest of that content
+            // needs (RouteMiniMap + up to 3 text lines already run close to a 40mm watch's
+            // visible height, with nothing there to scroll it). Single tap sends immediately -
+            // this is an emergency control, not a settings toggle, so a hold-to-confirm gesture
+            // would only slow down the one moment it needs to be fast. Only reaches the paired
+            // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
+            // comment for why it doesn't reach a guardian yet.
+            if (isNavigating) {
+                Box(
+                    modifier =
+                        Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .size(width = 64.dp, height = 26.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0xFFE53935))
+                            .clickable { WatchSosSender.send(context) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "SOS",
+                        color = Color.White,
+                        style = MaterialTheme.typography.caption1,
+                    )
                 }
             }
         }

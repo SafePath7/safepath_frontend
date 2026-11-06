@@ -67,12 +67,8 @@ fun RouteMiniMap(
         // Start of route.
         drawCircle(color = Color(0xFF9AA5AF), radius = 7f, center = project(routePoints.first()))
 
-        destination?.let { drawCircle(color = Color(0xFFDC2626), radius = 9f, center = project(it)) }
-
-        current?.let {
-            val center = project(it)
-            drawCircle(color = Color(0xFF16A34A), radius = 11f, center = center)
-            drawCircle(color = Color.White, radius = 4f, center = center)
-        }
+        // destination/current are intentionally not drawn as dots anymore (per request) - they're
+        // still taken above when computing minLat/maxLat/minLng/maxLng, so the route line keeps
+        // framing the full travelled extent instead of just the static polyline's own bounds.
     }
 }

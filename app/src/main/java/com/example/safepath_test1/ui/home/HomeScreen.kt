@@ -215,7 +215,8 @@ fun HomeScreen(
             com.example.safepath_test1.wear.WearMessenger.sendRouteFound(
                 context = context,
                 routeType = selectedType.title,
-                destinationName = destination.name.ifBlank { null },
+                destinationName =
+                    destination.name.ifBlank { null }?.takeUnless { it.startsWith("선택한 장소") },
                 distanceMeters = route.distanceMeters,
                 routeLineGeoJson = route.geoJsonLineString,
                 destinationPoint = destinationPoint,
