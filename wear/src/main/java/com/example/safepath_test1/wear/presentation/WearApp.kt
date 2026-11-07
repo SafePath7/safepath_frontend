@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -52,6 +54,16 @@ internal const val STALE_AFTER_MS = 10 * 60 * 1000L
 
 internal fun isStatusStale(updatedAt: Long, now: Long = System.currentTimeMillis()): Boolean =
     updatedAt <= 0L || now - updatedAt > STALE_AFTER_MS
+
+/** 확인 질문(UI-W3)에 응답이 없으면 보호자 알림으로 넘어가기까지의 시간. */
+private const val CHECK_IN_COUNTDOWN_MS = 15_000L
+
+/** 위험 감지 흐름: 평소(길안내) → 확인 질문(UI-W3) → 보호자 알림(UI-W4). */
+private enum class AlertStage {
+    None,
+    CheckIn,
+    Alerted,
+}
 
 private sealed class RouteStatus {
     data object Idle : RouteStatus()
@@ -214,28 +226,96 @@ fun WearApp() {
         }
     }
 
+    var alertStage by remember { mutableStateOf(AlertStage.None) }
+    var checkInStartedAt by remember { mutableStateOf(0L) }
+    var checkInRemainingMs by remember { mutableStateOf(CHECK_IN_COUNTDOWN_MS) }
+    var helpRequestedAt by remember { mutableStateOf(0L) }
+
+    // 지금은 방패 아이콘 길게 누르기(테스트용)로 호출된다. AI 서버가 연결되면 실제 위험 신호에서 호출한다.
+    fun startCheckIn() {
+        checkInStartedAt = System.currentTimeMillis()
+        checkInRemainingMs = CHECK_IN_COUNTDOWN_MS
+        alertStage = AlertStage.CheckIn
+    }
+
+    // 보호자 연동 전이라 SOS 버튼과 같은 경로(워치 → 폰 알림)로 보낸다.
+    fun requestHelp() {
+        WatchSosSender.send(context)
+        helpRequestedAt = System.currentTimeMillis()
+        alertStage = AlertStage.Alerted
+    }
+
+    LaunchedEffect(alertStage, checkInStartedAt) {
+        if (alertStage != AlertStage.CheckIn) return@LaunchedEffect
+        while (true) {
+            val remaining = CHECK_IN_COUNTDOWN_MS - (System.currentTimeMillis() - checkInStartedAt)
+            if (remaining <= 0) {
+                requestHelp()
+                break
+            }
+            checkInRemainingMs = remaining
+            delay(100)
+        }
+    }
+
     MaterialTheme {
-        Box(
-            modifier = Modifier.fillMaxSize().background(screenTint),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (alertStage) {
+                AlertStage.CheckIn ->
+                    CheckInScreen(
+                        remainingMs = checkInRemainingMs,
+                        totalMs = CHECK_IN_COUNTDOWN_MS,
+                        onOkay = { alertStage = AlertStage.None },
+                        onHelp = { requestHelp() },
+                    )
+                AlertStage.Alerted ->
+                    GuardianAlertedScreen(
+                        requestedAt = helpRequestedAt,
+                        onDismiss = { alertStage = AlertStage.None },
+                    )
+                AlertStage.None -> MainScreen(
+                    status = status,
+                    routeMap = routeMap,
+                    screenTint = screenTint,
+                    onSos = { WatchSosSender.send(context) },
+                    onShieldLongPress = { startCheckIn() },
+                )
+            }
+            if (isNavigating || alertStage != AlertStage.None) TimeText()
+        }
+    }
+}
+
+/** 평소 화면: 대기/탐색/연결 끊김 상태, 또는 길안내 중이면 UI-W1(길안내)과 UI-W2(이동 상태)를 옆으로 넘겨 본다. */
+@Composable
+private fun MainScreen(
+    status: RouteStatus,
+    routeMap: RouteMapState?,
+    screenTint: Color,
+    onSos: () -> Unit,
+    onShieldLongPress: () -> Unit,
+) {
+    val isNavigating = status is RouteStatus.Found
+    Box(
+        modifier = Modifier.fillMaxSize().background(screenTint),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (status is RouteStatus.Found) {
+            val pagerState = rememberPagerState(pageCount = { 2 })
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                if (page == 0) {
+                    GuidancePage(status, routeMap)
+                } else {
+                    MovingStatusPage(onShieldLongPress = onShieldLongPress)
+                }
+            }
+        } else {
             Column(
-                modifier =
-                    if (isNavigating) {
-                        // Keep the guidance content between the clock (top) and SOS (bottom).
-                        Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 38.dp)
-                    } else {
-                        Modifier.padding(12.dp)
-                    },
+                modifier = Modifier.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement =
-                    if (isNavigating) {
-                        Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
-                    } else {
-                        Arrangement.spacedBy(4.dp)
-                    },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                when (val current = status) {
+                when (status) {
                     RouteStatus.Idle -> {
                         Text(text = "SafePath", textAlign = TextAlign.Center)
                         Text(text = "대기 중", textAlign = TextAlign.Center)
@@ -244,82 +324,91 @@ fun WearApp() {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         Text(text = "탐색 중...", textAlign = TextAlign.Center)
                     }
-                    is RouteStatus.Found -> {
-                        Row(
-                            modifier =
-                                Modifier.clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF26405C))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF4ADE80))
-                            )
-                            Text(
-                                text = "  이동중",
-                                style = MaterialTheme.typography.caption2,
-                                color = Color.White,
-                            )
-                        }
-                        routeMap?.let { map ->
-                            Box(
-                                modifier =
-                                    Modifier.clip(RoundedCornerShape(16.dp))
-                                        .background(Color(0xFF1C3350))
-                                        .padding(4.dp)
-                            ) {
-                                RouteMiniMap(
-                                    routePoints = map.points,
-                                    destination = map.destination,
-                                    current = map.current,
-                                    modifier = Modifier.size(92.dp),
-                                )
-                            }
-                        }
-                        Text(
-                            text = "${current.destinationName ?: current.routeType} · ${current.distanceKm}km",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.caption2,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    is RouteStatus.Found -> Unit
                     RouteStatus.Stale -> {
                         Text(text = "⏱️ 연결 끊김", textAlign = TextAlign.Center)
                         Text(text = "폰과 블루투스 연결을 확인하세요", textAlign = TextAlign.Center)
                     }
                 }
             }
+        }
 
-            // Pinned to the screen's own bottom-center rather than laid out inside the Column
-            // above, so it can't get pushed off-screen by how much the rest of that content
-            // needs (RouteMiniMap + up to 3 text lines already run close to a 40mm watch's
-            // visible height, with nothing there to scroll it). Single tap sends immediately -
-            // this is an emergency control, not a settings toggle, so a hold-to-confirm gesture
-            // would only slow down the one moment it needs to be fast. Only reaches the paired
-            // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
-            // comment for why it doesn't reach a guardian yet.
-            if (isNavigating) {
-                TimeText()
-                Box(
-                    modifier =
-                        Modifier.align(Alignment.BottomCenter)
-                            .padding(bottom = 8.dp)
-                            .size(width = 64.dp, height = 26.dp)
-                            .clip(RoundedCornerShape(13.dp))
-                            .background(Color(0xFFE53935))
-                            .clickable { WatchSosSender.send(context) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "SOS",
-                        color = Color.White,
-                        style = MaterialTheme.typography.caption1,
-                    )
-                }
+        // Pinned to the screen's own bottom-center rather than laid out inside the Column
+        // above, so it can't get pushed off-screen by how much the rest of that content
+        // needs (RouteMiniMap + up to 3 text lines already run close to a 40mm watch's
+        // visible height, with nothing there to scroll it). Single tap sends immediately -
+        // this is an emergency control, not a settings toggle, so a hold-to-confirm gesture
+        // would only slow down the one moment it needs to be fast. Only reaches the paired
+        // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
+        // comment for why it doesn't reach a guardian yet.
+        if (isNavigating) {
+            Box(
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                        .size(width = 64.dp, height = 26.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(Color(0xFFE53935))
+                        .clickable(onClick = onSos),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "SOS",
+                    color = Color.White,
+                    style = MaterialTheme.typography.caption1,
+                )
             }
         }
+    }
+}
+
+/** UI-W1 길안내 페이지: 이동중 배지, 미니맵, 경로 이름 · 거리. 위는 시계, 아래는 SOS 자리로 비워둔다. */
+@Composable
+private fun GuidancePage(current: RouteStatus.Found, routeMap: RouteMapState?) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 38.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+    ) {
+        Row(
+            modifier =
+                Modifier.clip(RoundedCornerShape(50))
+                    .background(Color(0xFF26405C))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier =
+                    Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF4ADE80))
+            )
+            Text(
+                text = "  이동중",
+                style = MaterialTheme.typography.caption2,
+                color = Color.White,
+            )
+        }
+        routeMap?.let { map ->
+            Box(
+                modifier =
+                    Modifier.clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1C3350))
+                        .padding(4.dp)
+            ) {
+                RouteMiniMap(
+                    routePoints = map.points,
+                    destination = map.destination,
+                    current = map.current,
+                    modifier = Modifier.size(92.dp),
+                )
+            }
+        }
+        Text(
+            text = "${current.destinationName ?: current.routeType} · ${current.distanceKm}km",
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.caption2,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
