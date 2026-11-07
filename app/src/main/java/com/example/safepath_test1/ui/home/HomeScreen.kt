@@ -187,8 +187,8 @@ fun HomeScreen(
             else -> "#5FA8D3"
         }
 
-    // 사용자가 선택한 경로를 워치와 동기화하고 결과 조회 후 경로를 바꾸면 다시 전송한다.
-    LaunchedEffect(multiRouteResult, activeRoute, routeType) {
+    // 사용자가 선택한 경로 탭을 워치와 동기화하고, 결과 조회 후 탭을 바꾸거나 현재 위치가 갱신되면 다시 전송한다.
+    LaunchedEffect(multiRouteResult, activeRoute, routeType, currentLocation) {
         if (multiRouteResult == null) return@LaunchedEffect
         val selectedType = RouteType.valueOf(routeType)
         val route = activeRoute
@@ -196,8 +196,12 @@ fun HomeScreen(
             com.example.safepath_test1.wear.WearMessenger.sendRouteFound(
                 context = context,
                 routeType = selectedType.title,
-                destinationName = destination.name.ifBlank { null },
+                destinationName =
+                    destination.name.ifBlank { null }?.takeUnless { it.startsWith("선택한 장소") },
                 distanceMeters = route.distanceMeters,
+                routeLineGeoJson = route.geoJsonLineString,
+                destinationPoint = destinationPoint,
+                currentPoint = currentLocation,
             )
         } else {
             com.example.safepath_test1.wear.WearMessenger.sendIdle(context)
