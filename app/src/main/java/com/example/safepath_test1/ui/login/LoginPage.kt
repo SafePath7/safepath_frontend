@@ -30,11 +30,13 @@ import com.example.safepath_test1.ui.theme.*
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier, onLocalDemo: (() -> Unit)? = null) {
+fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier, repository: com.example.safepath_test1.auth.AuthRepository? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val auth = remember { GoogleAuthManager(context) }
+    val defaultAuth = remember(context) { GoogleAuthManager(context) }
+    val auth = repository ?: defaultAuth
     var busy by remember { mutableStateOf(false) }
+    var loginMessage by remember { mutableStateOf<String?>(null) }
     Column(
         modifier
             .fillMaxSize()
@@ -71,16 +73,17 @@ fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier, onLocal
             onClick = {
                 scope.launch {
                     busy = true
-                    val result = auth.signInWithGoogle()
-                    busy = false
-                    if (result.isSuccess) onLoginSuccess()
-                    else
-                        Toast.makeText(
-                                context,
-                                "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
-                                Toast.LENGTH_LONG,
-                            )
-                            .show()
+                    loginMessage = null
+                    try {
+                        val result = auth.signInWithGoogle()
+                        if (result.isSuccess) onLoginSuccess()
+                        else loginMessage = when (val error = result.exceptionOrNull()) {
+                            is com.example.safepath_test1.auth.LoginCancelledException -> "로그인을 취소했어요. 다시 시작할 수 있습니다."
+                            is com.google.firebase.FirebaseNetworkException -> "네트워크 연결을 확인한 뒤 다시 시도해 주세요."
+                            else -> error?.message?.takeIf { it == "사용 가능한 Google 계정을 찾지 못했습니다." }
+                                ?: "Google 로그인에 실패했습니다. 다시 시도해 주세요."
+                        }
+                    } finally { busy = false }
                 }
             },
             enabled = !busy,
@@ -90,7 +93,7 @@ fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier, onLocal
             Spacer(Modifier.width(12.dp))
             Text(if (busy) "로그인 중…" else "Google로 계속하기", color = TextMain)
         }
-        if (onLocalDemo != null) TextButton(onClick = onLocalDemo, enabled = !busy) { Text("서버 없이 로컬 시연 (모의)") }
+        loginMessage?.let { Text(it, modifier = Modifier.padding(top = 12.dp), color = TextMuted) }
         Text(
             "계속하면 Safe Path의 이용약관 · 개인정보처리방침에\n동의하는 것으로 간주돼요.",
             color = TextMuted,

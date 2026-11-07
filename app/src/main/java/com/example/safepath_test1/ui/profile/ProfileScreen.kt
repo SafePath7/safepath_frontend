@@ -44,6 +44,26 @@ fun ProfileScreen(
     val context = LocalContext.current
     val detectionStore = remember { com.example.safepath_test1.session.DetectionSettingsStore(context) }
     var detection by remember { mutableStateOf(detectionStore.read()) }
+    var showTimeout by rememberSaveable { mutableStateOf(false) }
+    var timeoutText by rememberSaveable { mutableStateOf("") }
+    var timeoutError by remember { mutableStateOf(false) }
+    if (showTimeout) AlertDialog(
+        onDismissRequest = { showTimeout = false },
+        title = { Text("응답 대기 시간") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("다음 귀가에 사용할 시간을 초 단위로 입력해 주세요. 기본값은 30초이며 이 기기에 저장합니다.")
+            OutlinedTextField(timeoutText, { timeoutText = it.filter { c -> c in '0'..'9' }; timeoutError = false },
+                label = { Text("초") }, singleLine = true, isError = timeoutError,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                supportingText = { if (timeoutError) Text("0보다 큰 정수를 입력해 주세요.") })
+        } },
+        confirmButton = { TextButton(onClick = {
+            val seconds = timeoutText.toIntOrNull()
+            if (seconds == null || seconds <= 0) timeoutError = true
+            else { detection = detection.copy(responseTimeoutSeconds = seconds); detectionStore.save(detection); showTimeout = false }
+        }) { Text("저장") } },
+        dismissButton = { TextButton(onClick = { showTimeout = false }) { Text("취소") } },
+    )
     val prefs = remember { context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE) }
     val user = FirebaseAuth.getInstance().currentUser
     val name = prefs.getString("user_name", null) ?: user?.displayName ?: "사용자"
@@ -159,7 +179,11 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
-                ProfileSetting("응답 대기 시간", "서버 정책 확정 대기")
+                ProfileSetting("응답 대기 시간", detection.responseTimeoutSeconds?.let { "${it}초 (기기 저장)" } ?: "미설정") {
+                    timeoutText = detection.responseTimeoutSeconds?.toString().orEmpty()
+                    timeoutError = false
+                    showTimeout = true
+                }
                 HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
                 ProfileSetting("즐겨찾는 장소", "홈에서 관리")
                 HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)

@@ -13,8 +13,8 @@ class DetectionSettingsStore(context: Context) {
         sound = preferences.getBoolean("$prefix.sound", false),
         motion = preferences.getBoolean("$prefix.motion", false),
         routeDeviation = preferences.getBoolean("$prefix.route", false),
-        // TBD-6 has no agreed default/range. Do not invent a production timeout.
-        responseTimeoutSeconds = null,
+        // Android default agreed by the app owner; server policy will be reconciled on integration.
+        responseTimeoutSeconds = preferences.getInt("$prefix.timeout", 30).takeIf { it > 0 } ?: 30,
     )
 
     fun save(value: DetectionSettings) {
@@ -23,6 +23,7 @@ class DetectionSettingsStore(context: Context) {
             .putBoolean("$prefix.sound", value.sound)
             .putBoolean("$prefix.motion", value.motion)
             .putBoolean("$prefix.route", value.routeDeviation)
+            .putInt("$prefix.timeout", value.responseTimeoutSeconds ?: 0)
             .apply()
     }
 }

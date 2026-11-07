@@ -64,13 +64,6 @@ fun SafePathApp() {
     }
 
     val context = LocalContext.current
-    var showLocalDemo by rememberSaveable { mutableStateOf(false) }
-    val isDebuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-    BackHandler(enabled = showLocalDemo) { showLocalDemo = false }
-    if (showLocalDemo && isDebuggable) {
-        SafePathTheme { com.example.safepath_test1.session.SessionDemoScreen(onBack = { showLocalDemo = false }) }
-        return
-    }
     var profileVersion by remember { mutableIntStateOf(0) }
     val profile =
         context.getSharedPreferences("safe_path_profile", android.content.Context.MODE_PRIVATE)
@@ -84,7 +77,7 @@ fun SafePathApp() {
         } else if (firebaseUser != null) {
             SafePathMain(onLogout = { auth.signOut() })
         } else {
-            LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser }, onLocalDemo = if (isDebuggable) ({ showLocalDemo = true }) else null)
+            LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser })
         }
     }
 }

@@ -5,17 +5,25 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.CancellationException
 
-class GoogleAuthManager(private val context: Context) {
+class LoginCancelledException : Exception()
+
+interface AuthRepository {
+    suspend fun signInWithGoogle(): Result<Unit>
+}
+
+class GoogleAuthManager(private val context: Context) : AuthRepository {
     private val auth = FirebaseAuth.getInstance()
     private val credentialManager = CredentialManager.create(context)
 
-    suspend fun signInWithGoogle(): Result<Unit> {
+    override suspend fun signInWithGoogle(): Result<Unit> {
         return try {
             val googleIdOption =
                 GetGoogleIdOption.Builder()
@@ -46,6 +54,10 @@ class GoogleAuthManager(private val context: Context) {
             } else {
                 Result.failure(IllegalStateException("Google credential이 아닙니다."))
             }
+        } catch (e: GetCredentialCancellationException) {
+            Result.failure(LoginCancelledException())
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: NoCredentialException) {
             Result.failure(IllegalStateException("사용 가능한 Google 계정을 찾지 못했습니다.", e))
         } catch (e: Exception) {

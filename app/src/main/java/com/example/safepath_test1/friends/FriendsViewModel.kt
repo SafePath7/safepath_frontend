@@ -23,8 +23,8 @@ data class FriendsUiState(
     val invite: CreatedFriendInvite? = null,
 )
 
-class FriendsViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = FriendsRepository(application)
+class FriendsViewModel(application: Application, private val repository: FriendsDataSource) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, FriendsRepository(application))
     private val state = MutableStateFlow(FriendsUiState())
     val uiState = state.asStateFlow()
     val isConfigured

@@ -30,12 +30,19 @@ data class CreatedFriendInvite(
     val senderName: String,
 )
 
-class FriendsRepository(private val context: Context) {
-    private val baseUrl = context.getString(R.string.friends_api_base_url).trimEnd('/')
+interface FriendsDataSource {
     val isConfigured: Boolean
+    suspend fun load(): FriendsSnapshot
+    suspend fun create(submissionId: String): CreatedFriendInvite
+    suspend fun respond(id: String, action: String)
+}
+
+class FriendsRepository(private val context: Context) : FriendsDataSource {
+    private val baseUrl = context.getString(R.string.friends_api_base_url).trimEnd('/')
+    override val isConfigured: Boolean
         get() = baseUrl.isNotBlank()
 
-    suspend fun load(): FriendsSnapshot {
+    override suspend fun load(): FriendsSnapshot {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("로그인이 필요합니다.")
         val json = request("GET", "/friends")
         val friends =
@@ -55,7 +62,7 @@ class FriendsRepository(private val context: Context) {
         return FriendsSnapshot(friends, requests("received"), requests("sent"))
     }
 
-    suspend fun create(submissionId: String): CreatedFriendInvite {
+    override suspend fun create(submissionId: String): CreatedFriendInvite {
         val user = FirebaseAuth.getInstance().currentUser ?: error("로그인이 필요합니다.")
         val profile = context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE)
         check(profile.getString("onboarded_uid", null) == user.uid) {
@@ -85,7 +92,7 @@ class FriendsRepository(private val context: Context) {
         )
     }
 
-    suspend fun respond(id: String, action: String) {
+    override suspend fun respond(id: String, action: String) {
         require(action in listOf("accept", "reject", "cancel", "disconnect"))
         require(Regex("[a-zA-Z0-9_-]{1,128}").matches(id))
         request("POST", "/requests/$id/$action", JSONObject())
@@ -117,6 +124,11 @@ class FriendsRepository(private val context: Context) {
                     }
                 }
                 val status = connection.responseCode
+                if (status == 401) {
+                    // FD-002: an invalid session returns to login. Do not sign out a newer account.
+                    if (FirebaseAuth.getInstance().currentUser?.uid == user.uid) FirebaseAuth.getInstance().signOut()
+                    error("인증이 만료됐습니다. 다시 로그인해 주세요.")
+                }
                 val stream =
                     if (status in 200..299) connection.inputStream else connection.errorStream
                 val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
