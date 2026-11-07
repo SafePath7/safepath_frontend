@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
     android:name=".SafePathApplication"
@@ -39,6 +40,28 @@
           android:scheme="wear"
           android:host="*"
           android:pathPrefix="/safepath/motion"
+        />
+            </intent-filter>
+        </service>
+
+        <service android:name=".wear.WearVoiceRelayService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+          android:scheme="wear"
+          android:host="*"
+          android:pathPrefix="/safepath/voice"
+        />
+            </intent-filter>
+        </service>
+
+        <service android:name=".wear.WearSosRelayService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+          android:scheme="wear"
+          android:host="*"
+          android:pathPrefix="/safepath/sos"
         />
             </intent-filter>
         </service>

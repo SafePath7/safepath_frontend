@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.example.safepath_test1.wear.WatchLauncher
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,5 +18,6 @@ class MainActivity : ComponentActivity() {
                 SystemBarStyle.light(scrim = Color.TRANSPARENT, darkScrim = Color.TRANSPARENT),
         )
         setContent { SafePathApp() }
+        WatchLauncher.launchIfWatchConnected(this)
     }
 }

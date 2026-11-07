@@ -1,21 +1,30 @@
 package com.example.safepath_test1.wear.presentation
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -24,6 +33,9 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
+import com.example.safepath_test1.wear.sensors.WatchSosSender
+import com.example.safepath_test1.wear.sensors.WatchVoiceRecorder
+import com.example.safepath_test1.wear.sensors.WatchVoiceSender
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataMapItem
@@ -50,6 +62,25 @@ private sealed class RouteStatus {
     data object Stale : RouteStatus()
 }
 
+/** Route shape + live position for RouteMiniMap, decoded from WearMessenger's DataMap fields. */
+private data class RouteMapState(
+    val points: List<LatLng>,
+    val destination: LatLng?,
+    val current: LatLng?,
+)
+
+/** Reverses WearMessenger's "lat,lng;lat,lng;..." encoding. */
+private fun decodeLatLngList(encoded: String?): List<LatLng> {
+    if (encoded.isNullOrBlank()) return emptyList()
+    return encoded.split(";").mapNotNull { pair ->
+        val parts = pair.split(",")
+        if (parts.size != 2) return@mapNotNull null
+        val lat = parts[0].toDoubleOrNull() ?: return@mapNotNull null
+        val lng = parts[1].toDoubleOrNull() ?: return@mapNotNull null
+        lat to lng
+    }
+}
+
 /**
  * Experimental counterpart to WearApp.kt: syncs status over the Wearable Data Layer's DataClient
  * instead of Firebase. Uses DataClient (not MessageClient) — see WearMessenger.kt on the phone side
@@ -61,6 +92,7 @@ fun WearApp() {
     val context = LocalContext.current
     var status by remember { mutableStateOf<RouteStatus>(RouteStatus.Idle) }
     var lastReceivedAt by remember { mutableStateOf(0L) }
+    var routeMap by remember { mutableStateOf<RouteMapState?>(null) }
 
     // 최신 센서 값을 폰의 WearDataRelayService로 전달한다. AI 서버 연동은 아직 구현되지 않았다.
     val sensorManager = remember { WatchSensorManager(context) }
@@ -74,6 +106,24 @@ fun WearApp() {
             motion?.let { WatchMotionSender.send(context, it) }
         }
     }
+
+    // Mic capture while route guidance is active (FOUND) - stopped the instant we leave that
+    // state so it doesn't keep listening (or draining the battery) once navigation ends.
+    val voiceRecorder = remember { WatchVoiceRecorder(context) }
+    val isNavigating = status is RouteStatus.Found
+    LaunchedEffect(isNavigating) {
+        if (isNavigating) voiceRecorder.start() else voiceRecorder.stop()
+    }
+    LaunchedEffect(voiceRecorder) {
+        voiceRecorder.audioChunks.collect { chunk -> WatchVoiceSender.send(context, chunk) }
+    }
+    DisposableEffect(Unit) { onDispose { voiceRecorder.stop() } }
+
+    // Live mic level while navigating, used to tint the whole screen below so the "is it
+    // actually picking up sound" indicator is easy to notice at a glance (a small dot wasn't).
+    val audioLevel by voiceRecorder.audioLevel.collectAsState()
+    val screenTint =
+        if (isNavigating) lerp(Color(0xFF14233B), Color(0xFFA5D6A7), audioLevel) else Color.Black
 
     fun applyDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
         val updatedAt = dataMap.getLong("updatedAt")
@@ -90,6 +140,22 @@ fun WearApp() {
                 else -> RouteStatus.Idle
             }
         status = if (isStatusStale(updatedAt)) RouteStatus.Stale else receivedStatus
+
+        val points = decodeLatLngList(dataMap.getString("routePoints"))
+        val destination =
+            if (dataMap.containsKey("destLat") && dataMap.containsKey("destLng")) {
+                dataMap.getDouble("destLat") to dataMap.getDouble("destLng")
+            } else {
+                null
+            }
+        val current =
+            if (dataMap.containsKey("curLat") && dataMap.containsKey("curLng")) {
+                dataMap.getDouble("curLat") to dataMap.getDouble("curLng")
+            } else {
+                null
+            }
+        routeMap = if (points.size >= 2) RouteMapState(points, destination, current) else null
+
         Log.i(TAG, "New status=$status")
     }
 
@@ -148,7 +214,7 @@ fun WearApp() {
 
     MaterialTheme {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().background(screenTint),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -166,20 +232,81 @@ fun WearApp() {
                         Text(text = "탐색 중...", textAlign = TextAlign.Center)
                     }
                     is RouteStatus.Found -> {
-                        Text(text = "✅ ${current.routeType}", textAlign = TextAlign.Center)
-                        Text(text = "${current.distanceKm} km", textAlign = TextAlign.Center)
-                        current.destinationName?.let {
+                        Row(
+                            modifier =
+                                Modifier.clip(RoundedCornerShape(50))
+                                    .background(Color(0xFF26405C))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF4ADE80))
+                            )
                             Text(
-                                text = it,
-                                textAlign = TextAlign.Center,
+                                text = "  이동중",
                                 style = MaterialTheme.typography.caption2,
+                                color = Color.White,
                             )
                         }
+                        routeMap?.let { map ->
+                            Box(
+                                modifier =
+                                    Modifier.clip(RoundedCornerShape(16.dp))
+                                        .background(Color(0xFF1C3350))
+                                        .padding(4.dp)
+                            ) {
+                                RouteMiniMap(
+                                    routePoints = map.points,
+                                    destination = map.destination,
+                                    current = map.current,
+                                )
+                            }
+                        }
+                        Text(
+                            text = current.destinationName ?: current.routeType,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.title3,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "${current.distanceKm}km",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.caption2,
+                            color = Color(0xFF9AA5B1),
+                        )
                     }
                     RouteStatus.Stale -> {
                         Text(text = "⏱️ 연결 끊김", textAlign = TextAlign.Center)
                         Text(text = "폰과 블루투스 연결을 확인하세요", textAlign = TextAlign.Center)
                     }
+                }
+            }
+
+            // Pinned to the screen's own bottom-center rather than laid out inside the Column
+            // above, so it can't get pushed off-screen by how much the rest of that content
+            // needs (RouteMiniMap + up to 3 text lines already run close to a 40mm watch's
+            // visible height, with nothing there to scroll it). Single tap sends immediately -
+            // this is an emergency control, not a settings toggle, so a hold-to-confirm gesture
+            // would only slow down the one moment it needs to be fast. Only reaches the paired
+            // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
+            // comment for why it doesn't reach a guardian yet.
+            if (isNavigating) {
+                Box(
+                    modifier =
+                        Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .size(width = 64.dp, height = 26.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0xFFE53935))
+                            .clickable { WatchSosSender.send(context) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "SOS",
+                        color = Color.White,
+                        style = MaterialTheme.typography.caption1,
+                    )
                 }
             }
         }
