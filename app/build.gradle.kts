@@ -46,6 +46,12 @@ val friendsApiBaseUrl =
         .trim()
         .trimEnd('/')
 
+// 디버그 전용 로컬 테스트 설정. 운영 빌드에는 전달하지 않는다.
+val testServerUrl = localProperties.getProperty("SAFEPATH_TEST_URL", "").trim()
+val testServerToken = localProperties.getProperty("SAFEPATH_TEST_TOKEN", "").trim()
+require(testServerUrl.matches(Regex("[A-Za-z0-9:/._-]*"))) { "Invalid SAFEPATH_TEST_URL" }
+require(testServerToken.matches(Regex("[A-Za-z0-9_-]*"))) { "Invalid SAFEPATH_TEST_TOKEN" }
+
 android {
     namespace = "com.example.safepath_test1"
     compileSdk {
@@ -67,7 +73,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            resValue("string", "safepath_test_url", testServerUrl)
+            resValue("string", "safepath_test_token", testServerToken)
+        }
         release {
+            resValue("string", "safepath_test_url", "")
+            resValue("string", "safepath_test_token", "")
             optimization {
                 enable = true
             }

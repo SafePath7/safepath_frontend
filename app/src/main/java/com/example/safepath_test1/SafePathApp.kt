@@ -37,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.safepath_test1.friends.CreatedFriendInvite
 import com.example.safepath_test1.location.shareLocation
+import com.example.safepath_test1.location.TestJourneyClient
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.model.PlaceSelection
 import com.example.safepath_test1.ui.SafePathTab
@@ -63,6 +64,13 @@ fun SafePathApp() {
     }
 
     val context = LocalContext.current
+    var showLocalDemo by rememberSaveable { mutableStateOf(false) }
+    val isDebuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    BackHandler(enabled = showLocalDemo) { showLocalDemo = false }
+    if (showLocalDemo && isDebuggable) {
+        SafePathTheme { com.example.safepath_test1.session.SessionDemoScreen(onBack = { showLocalDemo = false }) }
+        return
+    }
     var profileVersion by remember { mutableIntStateOf(0) }
     val profile =
         context.getSharedPreferences("safe_path_profile", android.content.Context.MODE_PRIVATE)
@@ -76,7 +84,7 @@ fun SafePathApp() {
         } else if (firebaseUser != null) {
             SafePathMain(onLogout = { auth.signOut() })
         } else {
-            LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser })
+            LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser }, onLocalDemo = if (isDebuggable) ({ showLocalDemo = true }) else null)
         }
     }
 }
@@ -87,6 +95,24 @@ private fun SafePathMain(onLogout: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var testJourneyActive by remember { mutableStateOf(TestJourneyClient.active) }
+    var testJourneyPending by remember { mutableStateOf(false) }
+    var testRoute by remember { mutableStateOf<String?>(null) }
+    var testMetadata by remember { mutableStateOf("{}") }
+    val beginTestJourney = { route: String?, metadata: String ->
+        testJourneyPending = true
+        TestJourneyClient.start(context, currentLocation, route, metadata) { success ->
+            testJourneyPending = false
+            testJourneyActive = success
+            if (success) currentLocation?.let { TestJourneyClient.update(context, it) }
+            android.widget.Toast.makeText(context, if (success) "간이 테스트 시작: 웹에서 위치를 확인하세요." else TestJourneyClient.lastError, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+    val localNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
+    val localNetworkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) beginTestJourney(testRoute, testMetadata)
+        else android.widget.Toast.makeText(context, "간이 테스트를 위해 근처 기기 접근 권한이 필요합니다.", android.widget.Toast.LENGTH_LONG).show()
+    }
     var origin by
         rememberSaveable(stateSaver = placeSelectionSaver) { mutableStateOf(PlaceSelection()) }
     var destination by
@@ -121,6 +147,7 @@ private fun SafePathMain(onLogout: () -> Unit) {
             val locationManager = context.getSystemService(LocationManager::class.java)
             val listener = LocationListener { location ->
                 currentLocation = GeoPoint(location.latitude, location.longitude)
+                TestJourneyClient.update(context, GeoPoint(location.latitude, location.longitude))
             }
             val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
 
@@ -178,6 +205,24 @@ private fun SafePathMain(onLogout: () -> Unit) {
                 HomeScreen(
                     currentLocation = currentLocation,
                     hasLocationPermission = hasLocationPermission,
+                    testJourneyActive = testJourneyActive,
+                    testJourneyPending = testJourneyPending,
+                    onTestJourneyStart = { route, originName, destinationName, names, originLat, originLng, destinationLat, destinationLng ->
+                        testRoute = route
+                        val metadata = org.json.JSONObject().put("origin", originName).put("destination", destinationName).put("recipients", org.json.JSONArray(names)).put("originLat", originLat).put("originLng", originLng).put("destinationLat", destinationLat).put("destinationLng", destinationLng).toString()
+                        testMetadata = metadata
+                        if (android.os.Build.VERSION.SDK_INT >= 37 && context.getString(com.example.safepath_test1.R.string.safepath_test_url).isNotBlank() && ContextCompat.checkSelfPermission(context, localNetworkPermission) != PackageManager.PERMISSION_GRANTED)
+                            localNetworkLauncher.launch(localNetworkPermission)
+                        else beginTestJourney(route, metadata)
+                    },
+                    onTestJourneyEnd = {
+                        testJourneyPending = true
+                        TestJourneyClient.end(context) { success ->
+                            testJourneyPending = false
+                            if (success) testJourneyActive = false
+                            android.widget.Toast.makeText(context, if (success) "간이 테스트가 종료되었습니다." else "종료 요청에 실패했습니다. 서버 연결을 확인하세요.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    },
                     origin = origin,
                     destination = destination,
                     onOriginChanged = { origin = it },

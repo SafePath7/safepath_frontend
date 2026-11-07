@@ -42,6 +42,8 @@ fun ProfileScreen(
         return
     }
     val context = LocalContext.current
+    val detectionStore = remember { com.example.safepath_test1.session.DetectionSettingsStore(context) }
+    var detection by remember { mutableStateOf(detectionStore.read()) }
     val prefs = remember { context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE) }
     val user = FirebaseAuth.getInstance().currentUser
     val name = prefs.getString("user_name", null) ?: user?.displayName ?: "사용자"
@@ -131,14 +133,25 @@ fun ProfileScreen(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Switch(checked = false, onCheckedChange = null, enabled = false)
+                        Switch(
+                            checked = listOf(detection.voice, detection.sound, detection.motion, detection.routeDeviation)[index],
+                            onCheckedChange = { enabled ->
+                                detection = when (index) {
+                                    0 -> detection.copy(voice = enabled)
+                                    1 -> detection.copy(sound = enabled)
+                                    2 -> detection.copy(motion = enabled)
+                                    else -> detection.copy(routeDeviation = enabled)
+                                }
+                                detectionStore.save(detection)
+                            },
+                        )
                     }
                     if (index < 3)
                         HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
                 }
             }
         }
-        Text("감지 설정은 아직 연결되지 않았어요.", color = TextMuted, fontSize = 12.sp)
+        Text("다음 귀가에 사용할 설정을 이 기기에 저장합니다. 실제 AI 감지는 서버 연결 후 사용할 수 있어요.", color = TextMuted, fontSize = 12.sp)
         Text("귀가 설정", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Surface(
             color = Color.White,
@@ -146,7 +159,7 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
-                ProfileSetting("응답 대기 시간", "연결 예정")
+                ProfileSetting("응답 대기 시간", "서버 정책 확정 대기")
                 HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)
                 ProfileSetting("즐겨찾는 장소", "홈에서 관리")
                 HorizontalDivider(Modifier.padding(start = 16.dp), color = AppBorder)

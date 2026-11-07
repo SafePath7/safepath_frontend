@@ -30,7 +30,7 @@ import com.example.safepath_test1.ui.theme.*
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier) {
+fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier, onLocalDemo: (() -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val auth = remember { GoogleAuthManager(context) }
@@ -90,6 +90,7 @@ fun LoginPage(onLoginSuccess: () -> Unit, modifier: Modifier = Modifier) {
             Spacer(Modifier.width(12.dp))
             Text(if (busy) "로그인 중…" else "Google로 계속하기", color = TextMain)
         }
+        if (onLocalDemo != null) TextButton(onClick = onLocalDemo, enabled = !busy) { Text("서버 없이 로컬 시연 (모의)") }
         Text(
             "계속하면 Safe Path의 이용약관 · 개인정보처리방침에\n동의하는 것으로 간주돼요.",
             color = TextMuted,

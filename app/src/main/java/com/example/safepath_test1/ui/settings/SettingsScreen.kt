@@ -126,6 +126,17 @@ fun SettingsScreen(
                     )
                 }
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
+                SettingsLinkRow("마이크 권한", "위험 음성·음향 감지에 사용") {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+                }
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
+                SettingsLinkRow("알림 권한", "귀가 상태·위험 확인 알림에 사용") {
+                    context.startActivity(
+                        if (android.os.Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    )
+                }
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
                 SettingsLinkRow("데이터 이용 안내", "보기") { showDataUsage = true }
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = AppBorder)
                 SettingsLinkRow("앱 버전", versionName)

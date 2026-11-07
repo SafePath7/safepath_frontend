@@ -1,21 +1,5 @@
 <div align="center">
 
-# SafePath
-
-**더 안전한 귀갓길을 위한 Android · Wear OS 프로젝트**
-
-CCTV와 가로등 정보를 바탕으로 도보 경로를 비교하고,<br />
-보호자 연결과 위치 공유를 지원합니다.
-
-![Android](https://img.shields.io/badge/Android-API%2024%2B-3DDC84?logo=android&logoColor=white)
-![Wear OS](https://img.shields.io/badge/Wear%20OS-API%2030%2B-4285F4?logo=wearos&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-Authentication%20%26%20Functions-DD2C00?logo=firebase&logoColor=white)
-
-[주요 기능](#주요-기능) · [기술 스택](#기술-스택) · [시작하기](#시작하기) · [프로젝트 구조](#프로젝트-구조) · [테스트](#테스트)
-
-</div>
-
 > **개발 단계의 프로토타입입니다.** SOS는 사용자가 공유 앱과 수신자를 직접 선택하는 방식이며, 자동 신고나 보호자 자동 알림은 구현되어 있지 않습니다. 안전도는 제공된 시설 데이터에 기반한 참고 정보입니다.
 
 ## 주요 기능
@@ -28,22 +12,22 @@ CCTV와 가로등 정보를 바탕으로 도보 경로를 비교하고,<br />
 
 ## 화면 미리보기
 
-| 홈 | 경로 탐색 | 친구 |
-| :---: | :---: | :---: |
+|                 홈                 |                경로 탐색                |                   친구                   |
+| :---------------------------------: | :-------------------------------------: | :--------------------------------------: |
 | ![홈 화면](docs/ui-review/home.png) | ![경로 화면](docs/ui-review/routes.png) | ![친구 화면](docs/ui-review/friends.png) |
 
 > 이미지는 프로젝트에 포함된 UI 리뷰 자료입니다. 실제 실행 화면은 설정과 데이터에 따라 다를 수 있습니다.
 
 ## 기술 스택
 
-| 영역 | 기술 |
-| --- | --- |
-| Android | Kotlin, Jetpack Compose, Material 3, ViewModel |
-| 지도와 경로 | Kakao Maps SDK v2, Kakao Local REST API, Mapbox Directions API |
-| 인증과 통신 | Firebase Authentication, Credential Manager, Google ID, Retrofit |
-| Wear OS | Wear Compose, Google Play services Wearable Data Layer |
+| 영역             | 기술                                                                 |
+| ---------------- | -------------------------------------------------------------------- |
+| Android          | Kotlin, Jetpack Compose, Material 3, ViewModel                       |
+| 지도와 경로      | Kakao Maps SDK v2, Kakao Local REST API, Mapbox Directions API       |
+| 인증과 통신      | Firebase Authentication, Credential Manager, Google ID, Retrofit     |
+| Wear OS          | Wear Compose, Google Play services Wearable Data Layer               |
 | 친구 요청 백엔드 | Node.js 22, Express, Firebase Functions, Firestore, Firebase Hosting |
-| 빌드 | Gradle Kotlin DSL, Gradle 9.5.0, Android Gradle Plugin 9.3.2 |
+| 빌드             | Gradle Kotlin DSL, Gradle 9.5.0, Android Gradle Plugin 9.3.2         |
 
 휴대폰 앱은 Android API 24 이상, Wear 앱은 API 30 이상을 대상으로 합니다. 두 모듈의 compile / target SDK는 37, Java 바이트코드 타깃은 11입니다. Gradle 실행에는 JDK 17을 권장합니다.
 

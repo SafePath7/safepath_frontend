@@ -17,7 +17,12 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle =
                 SystemBarStyle.light(scrim = Color.TRANSPARENT, darkScrim = Color.TRANSPARENT),
         )
-        setContent { SafePathApp() }
+        val localDemo = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && intent.getBooleanExtra("local_demo", false)
+        setContent {
+            if (localDemo) com.example.safepath_test1.ui.theme.SafePathTheme {
+                com.example.safepath_test1.session.SessionDemoScreen(onBack = { finish() })
+            } else SafePathApp()
+        }
         WatchLauncher.launchIfWatchConnected(this)
     }
 }

@@ -524,13 +524,16 @@ private fun EmptyPanel(message: String) {
 
 @Composable
 fun GuardianScreen(modifier: Modifier = Modifier, journeys: List<ProtectedJourney> = emptyList()) {
-    var selectedIndex by rememberSaveable { mutableStateOf<Int?>(null) }
-    val selectedJourney = selectedIndex?.let { journeys.getOrNull(it) }
+    val orderedJourneys = journeys.sortedBy {
+        when (it.status) { "위험상황" -> 0; "위험 의심단계" -> 1; "경로이탈" -> 2; else -> 3 }
+    }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedJourney = journeys.firstOrNull { it.sessionId.isNotBlank() && it.sessionId == selectedId }
     if (selectedJourney != null) {
-        BackHandler { selectedIndex = null }
+        BackHandler { selectedId = null }
         ProtectedJourneyScreen(
             selectedJourney,
-            onBack = { selectedIndex = null },
+            onBack = { selectedId = null },
             modifier = modifier,
         )
         return
@@ -544,13 +547,14 @@ fun GuardianScreen(modifier: Modifier = Modifier, journeys: List<ProtectedJourne
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         PageHeader("보호", "나를 보호자로 선택한 사람의 귀가를 확인해요")
-        journeys.forEachIndexed { index, journey ->
+        orderedJourneys.forEach { journey ->
             OutlinedButton(
                 shape = MaterialTheme.shapes.small,
-                onClick = { selectedIndex = index },
+                onClick = { selectedId = journey.sessionId },
+                enabled = journey.sessionId.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
             ) {
-                Text("${journey.userName} · ${journey.status}")
+                Text("${journey.userName} · ${journey.status}\n위치 갱신 ${journey.lastUpdated}")
             }
         }
         if (journeys.isEmpty())
@@ -574,21 +578,6 @@ fun GuardianScreen(modifier: Modifier = Modifier, journeys: List<ProtectedJourne
                     Text("보호 세션이 연결되면 사용자 위치와 상태를 여기에 표시합니다.", color = TextMuted)
                 }
             }
-        Text("최근 귀가 기록", style = MaterialTheme.typography.titleMedium)
-        Surface(
-            color = Color.White,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("표시할 귀가 기록이 없어요", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "귀가 기록 조회 기능은 아직 연결되지 않았어요.",
-                    color = TextMuted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
     }
 }
 
@@ -598,13 +587,16 @@ fun DepartureScreen(
     routeTitle: String,
     distance: String,
     onBack: () -> Unit,
+    testJourneyActive: Boolean,
+    testJourneyPending: Boolean,
+    onTestJourneyStart: (List<String>) -> Unit,
+    onTestJourneyEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val guardians = remember { readGuardians(context) }
+    val guardians = remember { readServerFriends(context) }
     var selected by rememberSaveable { mutableStateOf(listOf<String>()) }
-    var pin by rememberSaveable { mutableStateOf("") }
-    var notice by remember { mutableStateOf(false) }
+    var pin by remember { mutableStateOf("") }
     BackHandler(onBack = onBack)
     Column(
         modifier
@@ -668,7 +660,7 @@ fun DepartureScreen(
             }
             Text("종료 비밀번호", fontWeight = FontWeight.Bold)
             Text(
-                "도착 후 이 비밀번호를 입력해야 귀가가 종료돼요",
+                "운영 세션 종료에 사용할 숫자 4자리입니다. 현재 LAN 간이 테스트에는 비밀번호 인증이 연결되지 않았어요.",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -709,29 +701,18 @@ fun DepartureScreen(
                 },
             )
             Text(
-                "귀가 세션·보호자 알림은 서버 연동이 필요합니다.",
+                "간이 테스트는 현재 위치를 개인 Wi-Fi의 테스트 서버로 전송합니다. 보호자 알림이나 긴급 신고는 전송되지 않습니다.",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
         Button(
             shape = MaterialTheme.shapes.small,
-            onClick = { notice = true },
-            enabled = selected.isNotEmpty() && pin.length == 4,
+            onClick = { if (testJourneyActive) onTestJourneyEnd() else onTestJourneyStart(guardians.filter { it.id in selected }.map { it.name }) },
+            enabled = !testJourneyPending && (testJourneyActive || (selected.isNotEmpty() && pin.length == 4)),
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) {
-            Text("안전귀가 시작")
+            Text(if (testJourneyActive) "간이 테스트 종료" else "안전귀가 시작 (간이 테스트)")
         }
     }
-    if (notice)
-        AlertDialog(
-            onDismissRequest = { notice = false },
-            title = { Text("안전귀가 시작") },
-            text = { Text("귀가 세션 서버가 연결되지 않아 시작되지 않았어요. 보호자에게 알림은 전송되지 않았습니다.") },
-            confirmButton = {
-                TextButton(shape = MaterialTheme.shapes.small, onClick = { notice = false }) {
-                    Text("확인")
-                }
-            },
-        )
 }

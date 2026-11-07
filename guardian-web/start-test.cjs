@@ -1,0 +1,22 @@
+// 로컬 테스트 토큰을 Android 설정에 동기화합니다. 기존 속성은 유지합니다.
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const settings = path.join(__dirname, '..', 'local.properties');
+if (!fs.existsSync(settings)) throw new Error('Android local.properties가 없습니다. Android Studio에서 프로젝트를 먼저 열어 주세요.');
+let contents = fs.readFileSync(settings, 'utf8');
+const match = contents.match(/^\s*SAFEPATH_TEST_URL\s*[=:]\s*(\S+)\s*$/m);
+if (!match) throw new Error('Android local.properties에 SAFEPATH_TEST_URL을 먼저 설정하세요.');
+const url = new URL(match[1]);
+if (url.protocol !== 'http:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('SAFEPATH_TEST_URL은 http://PC-IP:포트/ 형식이어야 합니다.');
+const token = crypto.randomBytes(24).toString('base64url');
+const port = process.env.SAFEPATH_TEST_PORT || url.port || '8080';
+url.port = port;
+contents = contents.replace(/^\s*SAFEPATH_TEST_URL\s*[=:].*$/m, `SAFEPATH_TEST_URL=${url.href}`);
+if (/^\s*SAFEPATH_TEST_TOKEN\s*[=:]/m.test(contents)) contents = contents.replace(/^\s*SAFEPATH_TEST_TOKEN\s*[=:].*$/m, `SAFEPATH_TEST_TOKEN=${token}`);
+else contents = contents.replace(/\s*$/, '') + `\nSAFEPATH_TEST_TOKEN=${token}\n`;
+fs.writeFileSync(settings, contents, 'utf8');
+process.env.SAFEPATH_TEST_PORT = port;
+process.env.SAFEPATH_TEST_TOKEN = token;
+console.log('Android 테스트 설정을 갱신했습니다. 앱을 다시 빌드·설치하세요.');
+require('./test-server.cjs');

@@ -106,6 +106,10 @@ private enum class RouteType(val title: String, val icon: ImageVector) {
 fun HomeScreen(
     currentLocation: GeoPoint?,
     hasLocationPermission: Boolean,
+    testJourneyActive: Boolean,
+    testJourneyPending: Boolean,
+    onTestJourneyStart: (String?, String, String, List<String>, Double?, Double?, Double?, Double?) -> Unit,
+    onTestJourneyEnd: () -> Unit,
     origin: PlaceSelection,
     destination: PlaceSelection,
     onOriginChanged: (PlaceSelection) -> Unit,
@@ -118,7 +122,7 @@ fun HomeScreen(
     val homeViewModel: HomeViewModel = viewModel()
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val routeTypes = remember { listOf(RouteType.Safe, RouteType.Recommended, RouteType.Shortest) }
-    val routePagerState = rememberPagerState(pageCount = { routeTypes.size })
+    val routePagerState = rememberPagerState(initialPage = 1, pageCount = { routeTypes.size })
     val routeType = routeTypes[routePagerState.settledPage].name
     val coroutineScope = rememberCoroutineScope()
     var recenterToken by remember { mutableIntStateOf(0) }
@@ -126,6 +130,7 @@ fun HomeScreen(
     var activeTab by rememberSaveable { mutableStateOf("destination") }
     var isDestinationSearchOpen by rememberSaveable { mutableStateOf(false) }
     var stage by rememberSaveable { mutableStateOf("search") }
+    var selectedTestRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var destinationConfirmation by remember { mutableIntStateOf(0) }
     var inputError by rememberSaveable { mutableStateOf<String?>(null) }
     var favoriteLabel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -156,6 +161,10 @@ fun HomeScreen(
 
     // 출발지·목적지 변경 시 경로를 다시 조회하고 워치 상태도 함께 갱신한다.
     LaunchedEffect(origin, destination, destinationConfirmation) {
+        if (testJourneyActive) {
+            stage = "navigation"
+            return@LaunchedEffect
+        }
         inputError =
             if (destination.hasCoordinates() && !origin.hasCoordinates())
                 "출발지를 선택하거나 현재 위치를 확인해 주세요."
@@ -208,6 +217,11 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(testJourneyActive) {
+        if (testJourneyActive) stage = "navigation"
+        else if (stage == "navigation") stage = "departure"
+    }
+
     if (stage == "departure") {
         DepartureScreen(
             destination.name,
@@ -216,6 +230,10 @@ fun HomeScreen(
                 String.format(java.util.Locale.KOREA, "%.1fkm", it.distanceMeters / 1000)
             } ?: "—",
             onBack = { stage = "routes" },
+            testJourneyActive = testJourneyActive,
+            testJourneyPending = testJourneyPending,
+            onTestJourneyStart = { names -> onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude) },
+            onTestJourneyEnd = onTestJourneyEnd,
             modifier = modifier.padding(bottom = 88.dp),
         )
         return
@@ -227,7 +245,7 @@ fun HomeScreen(
             recenterToken = recenterToken,
             showSafetyFacilities = showSafetyFacilities,
             destinationPoint = destinationPoint,
-            routeLineGeoJson = activeRoute?.geoJsonLineString,
+            routeLineGeoJson = if (stage == "navigation") selectedTestRoute else activeRoute?.geoJsonLineString,
             routeLineColor = activeRouteColor,
             alternativeRouteLines =
                 if (stage == "routes")
@@ -407,7 +425,7 @@ fun HomeScreen(
             }
         }
 
-        if (!isDestinationSearchOpen) {
+        if (!isDestinationSearchOpen && stage != "navigation") {
             Surface(
                 modifier =
                     Modifier.align(Alignment.BottomCenter)
@@ -502,7 +520,7 @@ fun HomeScreen(
                         }
                         Button(
                             shape = MaterialTheme.shapes.small,
-                            onClick = { stage = "departure" },
+                            onClick = { selectedTestRoute = activeRoute?.geoJsonLineString; stage = "departure" },
                             enabled = activeRoute != null && !routePagerState.isScrollInProgress,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         ) {
@@ -621,6 +639,14 @@ fun HomeScreen(
             )
         }
 
+        if (stage == "navigation") {
+            Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).padding(bottom = 88.dp), shape = RoundedCornerShape(16.dp), color = Color.White) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("안전귀가 이동 중", fontWeight = FontWeight.Bold)
+                    Button(onClick = onTestJourneyEnd, enabled = !testJourneyPending) { Text("테스트 종료") }
+                }
+            }
+        }
         MapSideControls(
             modifier =
                 Modifier.align(Alignment.TopEnd)

@@ -32,6 +32,7 @@ data class ProtectedJourney(
     val detectedAt: String? = null,
     val confirmationUnanswered: Boolean = false,
     val history: List<Pair<String, String>> = emptyList(),
+    val sessionId: String = "",
 )
 
 @Composable
