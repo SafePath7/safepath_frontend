@@ -27,10 +27,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeText
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
@@ -218,9 +220,20 @@ fun WearApp() {
             contentAlignment = Alignment.Center,
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier =
+                    if (isNavigating) {
+                        // Keep the guidance content between the clock (top) and SOS (bottom).
+                        Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 38.dp)
+                    } else {
+                        Modifier.padding(12.dp)
+                    },
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement =
+                    if (isNavigating) {
+                        Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
+                    } else {
+                        Arrangement.spacedBy(4.dp)
+                    },
             ) {
                 when (val current = status) {
                     RouteStatus.Idle -> {
@@ -260,20 +273,17 @@ fun WearApp() {
                                     routePoints = map.points,
                                     destination = map.destination,
                                     current = map.current,
+                                    modifier = Modifier.size(92.dp),
                                 )
                             }
                         }
                         Text(
-                            text = current.destinationName ?: current.routeType,
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.title3,
-                            color = Color.White,
-                        )
-                        Text(
-                            text = "${current.distanceKm}km",
+                            text = "${current.destinationName ?: current.routeType} · ${current.distanceKm}km",
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.caption2,
-                            color = Color(0xFF9AA5B1),
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     RouteStatus.Stale -> {
@@ -292,6 +302,7 @@ fun WearApp() {
             // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
             // comment for why it doesn't reach a guardian yet.
             if (isNavigating) {
+                TimeText()
                 Box(
                     modifier =
                         Modifier.align(Alignment.BottomCenter)
