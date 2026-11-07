@@ -42,10 +42,11 @@ test('LIVE 인증 후 상태 갱신, 중복 무시, 종료 시 재연결 중단'
   assert.match(element('status').textContent, /확인 중/);
   await ws.onmessage({ data: JSON.stringify({ type: 'snapshot', sequence: 4, status: 'SOS', location: null }) });
   assert.match(element('status').textContent, /SOS/);
-  await ws.onmessage({ data: JSON.stringify({ type: 'snapshot', sequence: 5, status: 'MOVING', session: { origin: 'A', destination: 'B', recipients: ['C'], startedAt: '2026-01-01T00:00:00Z' }, route: { type: 'LineString', coordinates: [[0, 0], [0.01, 0]] }, location: { latitude: 0, longitude: 0.005, updatedAt: '2026-01-01T00:00:00Z' } }) });
+  await ws.onmessage({ data: JSON.stringify({ type: 'snapshot', sequence: 5, status: 'MOVING', session: { origin: 'A', destination: 'B', recipients: ['C'], routeType: 'Recommended', startedAt: '2026-01-01T00:00:00Z' }, route: { type: 'LineString', coordinates: [[0, 0], [0.01, 0]] }, location: { latitude: 0, longitude: 0.005, updatedAt: '2026-01-01T00:00:00Z' } }) });
   assert.equal(element('.info-row strong:0').textContent, 'C');
   assert.equal(element('.info-row strong:1').textContent, 'A');
   assert.equal(element('.info-row strong:2').textContent, 'B');
+  assert.equal(element('selectedRoute').textContent, '추천 경로');
   assert.equal(element('progressLabel').textContent, '50%');
   await ws.onmessage({ data: JSON.stringify({ type: 'expired' }) });
   assert.match(element('status').textContent, /종료/);

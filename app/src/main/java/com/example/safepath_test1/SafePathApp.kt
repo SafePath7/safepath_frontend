@@ -207,9 +207,9 @@ private fun SafePathMain(onLogout: () -> Unit) {
                     hasLocationPermission = hasLocationPermission,
                     testJourneyActive = testJourneyActive,
                     testJourneyPending = testJourneyPending,
-                    onTestJourneyStart = { route, originName, destinationName, names, originLat, originLng, destinationLat, destinationLng ->
+                    onTestJourneyStart = { route, originName, destinationName, names, originLat, originLng, destinationLat, destinationLng, routeType ->
                         testRoute = route
-                        val metadata = org.json.JSONObject().put("origin", originName).put("destination", destinationName).put("recipients", org.json.JSONArray(names)).put("originLat", originLat).put("originLng", originLng).put("destinationLat", destinationLat).put("destinationLng", destinationLng).toString()
+                        val metadata = org.json.JSONObject().put("origin", originName).put("destination", destinationName).put("recipients", org.json.JSONArray(names)).put("originLat", originLat).put("originLng", originLng).put("destinationLat", destinationLat).put("destinationLng", destinationLng).put("routeType", routeType).toString()
                         testMetadata = metadata
                         if (android.os.Build.VERSION.SDK_INT >= 37 && context.getString(com.example.safepath_test1.R.string.safepath_test_url).isNotBlank() && ContextCompat.checkSelfPermission(context, localNetworkPermission) != PackageManager.PERMISSION_GRANTED)
                             localNetworkLauncher.launch(localNetworkPermission)

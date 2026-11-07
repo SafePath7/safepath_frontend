@@ -5,6 +5,7 @@
   document.querySelectorAll(".info-row strong")[0].textContent = "데모 사용자";
   document.querySelectorAll(".info-row strong")[1].textContent = "계명대학교 성서캠퍼스";
   document.querySelectorAll(".info-row strong")[2].textContent = "대구 성서 지역 (데모)";
+  document.getElementById("selectedRoute").textContent = "추천 경로 (시연)";
   document.querySelector(".map-indicator").textContent = "● 시뮬레이션";
   document.querySelector(".heading p").textContent =
     "실제 위치와 연결되지 않은 시뮬레이션 화면입니다.";

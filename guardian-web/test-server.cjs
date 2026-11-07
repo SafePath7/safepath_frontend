@@ -36,7 +36,8 @@ const server = http.createServer((req, res) => {
       if (pathname.endsWith('/start')) {
         const info = data.session || {};
         if (typeof info !== 'object' || (info.origin != null && (typeof info.origin !== 'string' || info.origin.length > 200)) || (info.destination != null && (typeof info.destination !== 'string' || info.destination.length > 200)) || (info.recipients != null && (!Array.isArray(info.recipients) || info.recipients.length > 30 || !info.recipients.every(n => typeof n === 'string' && n.length <= 100)))) return json(res, 400, {});
-        session = { origin: info.origin || '', destination: info.destination || '', recipients: info.recipients || [], startedAt: new Date().toISOString() };
+        if (info.routeType != null && !['Safe', 'Recommended', 'Shortest'].includes(info.routeType)) return json(res, 400, {});
+        session = { origin: info.origin || '', destination: info.destination || '', recipients: info.recipients || [], routeType: info.routeType || null, startedAt: new Date().toISOString() };
       }
       let route = pathname.endsWith('/start') ? null : state.route;
       if (pathname.endsWith('/start') && data.route != null) {

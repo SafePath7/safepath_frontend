@@ -113,6 +113,7 @@
     rows[1].textContent = info?.origin || "—";
     rows[2].textContent = info?.destination || "—";
     rows[3].textContent = info?.startedAt && Number.isFinite(Date.parse(info.startedAt)) ? new Date(info.startedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—";
+    $("selectedRoute").textContent = ({ Safe: "안전 경로", Recommended: "추천 경로", Shortest: "최단 경로" })[info?.routeType] || "—";
     const coords = data.route?.coordinates, loc = data.location;
     let progress = null;
     if (Array.isArray(coords) && coords.length >= 2 && loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)) {

@@ -108,7 +108,7 @@ fun HomeScreen(
     hasLocationPermission: Boolean,
     testJourneyActive: Boolean,
     testJourneyPending: Boolean,
-    onTestJourneyStart: (String?, String, String, List<String>, Double?, Double?, Double?, Double?) -> Unit,
+    onTestJourneyStart: (String?, String, String, List<String>, Double?, Double?, Double?, Double?, String) -> Unit,
     onTestJourneyEnd: () -> Unit,
     origin: PlaceSelection,
     destination: PlaceSelection,
@@ -232,7 +232,7 @@ fun HomeScreen(
             onBack = { stage = "routes" },
             testJourneyActive = testJourneyActive,
             testJourneyPending = testJourneyPending,
-            onTestJourneyStart = { names -> onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude) },
+            onTestJourneyStart = { names -> onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType) },
             onTestJourneyEnd = onTestJourneyEnd,
             modifier = modifier.padding(bottom = 88.dp),
         )

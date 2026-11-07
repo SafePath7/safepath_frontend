@@ -4,3 +4,28 @@
 :root{font-family:Inter,"Noto Sans KR",sans-serif;color:#193e54;background:#f7f9fa;--sp-navy:#19445e;--sp-teal:#198365;--sp-border:#e4eaf0;--sp-muted:#75838d;--sp-red:#d63e40}
 body{background:#f7f9fa;color:#193e54}.sidebar{background:#fff;border-right:1px solid var(--sp-border)}.brand,.brand span{color:var(--sp-navy)}.brand small,.side-label{color:#8b99a3}.brand-icon{background:#eaf1f5;color:var(--sp-navy);border-radius:14px}.nav{color:#677985;border-radius:11px}.nav.active{background:#e9f2f6;color:var(--sp-navy)}.sidebar-bottom{background:#f4f8fa;border:1px solid var(--sp-border);border-radius:12px;color:var(--sp-navy)}.sidebar-bottom p{color:#667b87}.shield,.privacy{color:var(--sp-teal)}.privacy{border-color:var(--sp-border)}header{background:#fff;border-bottom:1px solid var(--sp-border)}.crumb{color:#516877}.crumb span{color:#a9b5be}.header-right{color:#718390}.avatar{background:#e7eef2;color:var(--sp-navy)}.content{padding-top:33px}.eyebrow{color:var(--sp-teal)}.heading h1{color:var(--sp-navy)}.heading p,.panel-top p{color:#7b8a96}.demo-pill{background:#fff7e8;color:#9d6b23;border:1px solid #f2dfbd}.stat,.map-panel,.info-panel,.activity{background:#fff;border:1px solid var(--sp-border);border-radius:13px;box-shadow:0 3px 14px rgba(23,60,82,.035)}.stat-title{color:#6b7e8a}.stat-title span{color:#a2b0b8}.stat-number{color:var(--sp-navy)}.stat-number small,.stat-sub{color:#83949f}.status{color:var(--sp-teal)}.panel-top h2,.info-panel h2,.activity h2{color:var(--sp-navy)}.map-indicator,.session-tag{background:#e9f7ef;border:1px solid #d7eee1;color:#16835e;border-radius:9px}.live{color:var(--sp-teal)}.live i,.map-indicator i{background:#1caa75;box-shadow:none}#map,.leaflet-container{background:#e8eef2}.map-footer{color:#617582}.info-row{border-bottom:1px solid #edf1f4;color:var(--sp-navy)}.info-row span,.progress-head span{color:#85939d}.progress-head b{color:var(--sp-teal)}.progress{background:#eaf0f3}.progress div{background:#228f73}.activity h2 span{color:var(--sp-teal)}.event{color:var(--sp-navy)}.event-icon{background:#e8f4ee;color:#198765}.event p{color:#82919a}.notice{background:#f0f7f8;border:1px solid #deebee;border-radius:12px;color:var(--sp-navy)}.notice strong{color:var(--sp-navy)}.notice p{color:#728692}footer{color:#91a0a9}.controls{background:#fff;border:1px solid #dbe4e9;box-shadow:0 8px 30px #1b45522b}.controls button{background:var(--sp-navy);color:#fff;border-radius:9px}.controls button:hover{background:#28617e}#risk{background:#ce4145}.current-marker{border-color:#fff;background:#2789b8;box-shadow:0 0 0 10px #2789b82c,0 3px 15px #1e577b55}.destination-marker{border-color:#fff;background:#184b66;box-shadow:0 0 0 7px #184b6622}.origin-marker{width:20px;height:20px;border:3px solid white;border-radius:50%;background:#647985}.blue{background:#3999c7}.mint{background:#2789b8}.orange{background:#184b66}
 [hidden],.controls[hidden],.danger-banner[hidden]{display:none!important}.map-panel{position:relative}.map-message{max-width:280px;padding:10px 12px;border-radius:8px;background:#fff;color:#193e54;font-size:12px;line-height:1.5}.danger-banner{margin:-10px 0 20px;border-color:#d63e40;background:#fff1f1;color:#d63e40;font-weight:700}#recenter{position:absolute;right:16px;bottom:72px;z-index:500;width:40px;height:40px;border:1px solid #aebfc8;border-radius:8px;background:#fff;color:#19445e;font-size:26px;cursor:pointer}#recenter:disabled{color:#aab8bf} .leaflet-bottom.leaflet-right{bottom:48px}
+
+/* Keep the map above status cards at every screen size. */
+.sidebar-bottom { display: none; }
+.content { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr); grid-template-areas: "heading heading" "banner banner" "map right" "stats stats" "footer footer"; column-gap: 19px; }
+.heading { grid-area: heading; }
+.danger-banner { grid-area: banner; }
+.layout { display: contents; }
+.map-panel { grid-area: map; }
+.stats { grid-area: stats; margin: 19px 0 0; }
+.right { grid-area: right; }
+.content > footer { grid-area: footer; }
+@media (max-width: 1100px) {
+  .content { grid-template-columns: minmax(0, 1fr); grid-template-areas: "heading" "banner" "map" "stats" "right" "footer"; }
+  .right { margin-top: 19px; }
+}
+@media (max-width: 700px) {
+  .content { display: flex; flex-direction: column; }
+  .heading { order: 0; }
+  .danger-banner { order: 1; }
+  .layout { display: contents; }
+  .map-panel { order: 2; }
+  .stats { order: 3; margin: 16px 0 19px; }
+  .right { order: 4; }
+  .content > footer { order: 5; }
+}
