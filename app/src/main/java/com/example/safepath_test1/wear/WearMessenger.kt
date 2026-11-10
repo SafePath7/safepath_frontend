@@ -6,6 +6,8 @@ import com.example.safepath_test1.model.GeoPoint
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import org.json.JSONObject
 
@@ -23,7 +25,10 @@ object WearMessenger {
      * for a small watch screen, and keeps the DataItem payload tiny regardless of how long the
      * actual walking route is.
      */
-    private const val MAX_ROUTE_POINTS = 40
+    private const val MAX_ROUTE_POINTS = 150
+
+    /** 직선 구간의 점은 지우되 모퉁이는 남기는 허용 오차(m). 워치가 모퉁이로 회전 안내를 계산한다. */
+    private const val SIMPLIFY_TOLERANCE_M = 3.0
 
     private fun send(
         context: Context,
@@ -42,7 +47,7 @@ object WearMessenger {
                 if (distanceMeters != null) dataMap.putDouble("distanceMeters", distanceMeters)
                 if (destinationName != null) dataMap.putString("destinationName", destinationName)
                 routeLineGeoJson?.let { geoJson ->
-                    val points = downsample(parseGeoJsonPoints(geoJson), MAX_ROUTE_POINTS)
+                    val points = simplifyForWatch(parseGeoJsonPoints(geoJson))
                     if (points.isNotEmpty()) dataMap.putString("routePoints", encodePoints(points))
                 }
                 destinationPoint?.let {
@@ -93,6 +98,10 @@ object WearMessenger {
         destinationPoint: GeoPoint? = null,
         currentPoint: GeoPoint? = null,
     ) {
+        // 워치 미니맵 배경 지도 이미지: 사용자 위치(없으면 경로 시작점) 기준으로, 이미지 중심에서 충분히
+        // 멀어졌을 때만 새로 받아서 보낸다(WearMapImageSender가 걸러 주므로 매번 불러도 된다).
+        val mapCenter = currentPoint ?: routeLineGeoJson?.let { parseGeoJsonPoints(it).firstOrNull() }
+        mapCenter?.let { WearMapImageSender.sendIfNeeded(context, it) }
         send(
             context,
             "FOUND",
@@ -103,6 +112,55 @@ object WearMessenger {
             destinationPoint = destinationPoint,
             currentPoint = currentPoint,
         )
+    }
+
+    /** 모퉁이는 남기고 직선 위의 점만 줄인 뒤, 그래도 많으면 균등하게 줄인다. */
+    private fun simplifyForWatch(points: List<GeoPoint>): List<GeoPoint> =
+        downsample(douglasPeucker(points, SIMPLIFY_TOLERANCE_M), MAX_ROUTE_POINTS)
+
+    /** Douglas-Peucker: 양 끝을 잇는 직선에서 [toleranceMeters] 넘게 벗어난 점만 남긴다. */
+    private fun douglasPeucker(points: List<GeoPoint>, toleranceMeters: Double): List<GeoPoint> {
+        if (points.size < 3) return points
+        val keep = BooleanArray(points.size)
+        keep[0] = true
+        keep[points.lastIndex] = true
+        val stack = ArrayDeque<IntArray>()
+        stack.addLast(intArrayOf(0, points.lastIndex))
+        while (stack.isNotEmpty()) {
+            val range = stack.removeLast()
+            val start = range[0]
+            val end = range[1]
+            var farthest = 0.0
+            var farthestIndex = -1
+            for (i in start + 1 until end) {
+                val distance = distanceToSegmentMeters(points[i], points[start], points[end])
+                if (distance > farthest) {
+                    farthest = distance
+                    farthestIndex = i
+                }
+            }
+            if (farthestIndex != -1 && farthest > toleranceMeters) {
+                keep[farthestIndex] = true
+                stack.addLast(intArrayOf(start, farthestIndex))
+                stack.addLast(intArrayOf(farthestIndex, end))
+            }
+        }
+        return points.filterIndexed { index, _ -> keep[index] }
+    }
+
+    /** 점 [p]에서 선분 a-b까지의 거리(m). 짧은 거리라 평면으로 근사한다. */
+    private fun distanceToSegmentMeters(p: GeoPoint, a: GeoPoint, b: GeoPoint): Double {
+        val cosLat = cos(Math.toRadians(a.latitude))
+        fun x(g: GeoPoint) = (g.longitude - a.longitude) * cosLat * 111_320.0
+        fun y(g: GeoPoint) = (g.latitude - a.latitude) * 110_540.0
+        val bx = x(b)
+        val by = y(b)
+        val px = x(p)
+        val py = y(p)
+        val lengthSquared = bx * bx + by * by
+        if (lengthSquared == 0.0) return hypot(px, py)
+        val t = ((px * bx + py * by) / lengthSquared).coerceIn(0.0, 1.0)
+        return hypot(px - t * bx, py - t * by)
     }
 
     private fun downsample(points: List<GeoPoint>, maxPoints: Int): List<GeoPoint> {
@@ -116,7 +174,7 @@ object WearMessenger {
     private fun encodePoints(points: List<GeoPoint>): String =
         points.joinToString(";") { String.format(Locale.US, "%.6f,%.6f", it.latitude, it.longitude) }
 
-    private fun parseGeoJsonPoints(geoJson: String): List<GeoPoint> =
+    internal fun parseGeoJsonPoints(geoJson: String): List<GeoPoint> =
         try {
             val coordinates = JSONObject(geoJson).optJSONArray("coordinates") ?: return emptyList()
             buildList {
