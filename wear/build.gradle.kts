@@ -29,6 +29,11 @@ android {
 }
 
 dependencies {
+    constraints {
+        implementation("androidx.fragment:fragment:1.3.6") {
+            because("Activity Result requires Fragment 1.3.0+; Play services requests 1.1.0")
+        }
+    }
     implementation(libs.androidx.core.ktx)
     testImplementation(libs.junit)
     implementation("androidx.activity:activity-compose:1.10.1")
