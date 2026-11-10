@@ -23,11 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.wear.compose.material.Text
 
-/** 처음 보여 줄 지도 지름(m) = 반경 200m. 두 번 탭해서 되돌아올 때도 이 값이다. */
-internal const val DEFAULT_VIEW_METERS = 400.0
+/** 처음 보여 줄 지도 지름(m) = 반경 150m. 두 번 탭해서 되돌아올 때도 이 값이다. */
+internal const val DEFAULT_VIEW_METERS = 300.0
 
 /** 핀치로 줄일 수 있는 최소 지름(m). 이보다 작게 하면 이미지가 너무 흐려진다. */
-internal const val MIN_VIEW_METERS = 250.0
+internal const val MIN_VIEW_METERS = 200.0
 
 /** 핀치로 넓힐 수 있는 최대 지름(m). 폰이 받은 이미지(약 1km 폭)보다 충분히 작아야 한다. */
 internal const val MAX_VIEW_METERS = 800.0
