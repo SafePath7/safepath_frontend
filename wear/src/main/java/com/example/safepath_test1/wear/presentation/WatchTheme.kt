@@ -44,6 +44,8 @@ internal object WatchColors {
     val Warning = Color(0xFFF2A93B) // 위험 의심 주황
     val Danger = Color(0xFFD23C3C) // SOS, 도움 요청
     val DangerBg = Color(0xFFB42F2F) // 위험상황 배경
+    val SafeIconBg = Color(0xFF133B2C) // 안전 화면 방패 원
+    val WarningIconBg = Color(0xFF3A2E14) // 확인 질문 경고 아이콘 바탕
 }
 
 /** 명세가 기준으로 삼은 원형 화면 크기(dp). 실제 워치는 이보다 작아서 배율로 줄여 쓴다. */

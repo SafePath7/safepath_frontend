@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import androidx.wear.compose.material.TimeText
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
@@ -60,6 +59,16 @@ import kotlinx.coroutines.launch
 private const val TAG = "WearApp"
 private const val PATH_STATUS = "/safepath/status"
 
+/** 폰이 위험상황을 해제했을 때 보내는 DataItem 경로. DataMap의 "updatedAt"(밀리초)만 쓴다. */
+private const val PATH_RELEASE = "/safepath/release"
+
+/** 폰·워치 시계가 조금 어긋나도 방금 한 해제 신호를 놓치지 않도록 두는 여유(ms). */
+private const val RELEASE_CLOCK_SKEW_MS = 5_000L
+
+/** 이 위험상황(요청 시각 [alertRequestedAt]) 이후에 온 해제 신호인지. 옛 위험상황의 낡은 신호는 무시한다. */
+internal fun shouldReleaseAlert(releaseSignalAt: Long, alertRequestedAt: Long): Boolean =
+    releaseSignalAt > 0L && releaseSignalAt >= alertRequestedAt - RELEASE_CLOCK_SKEW_MS
+
 /** If no update has arrived from the phone in this long, treat it as stale/disconnected. */
 internal const val STALE_AFTER_MS = 10 * 60 * 1000L
 
@@ -67,7 +76,7 @@ internal fun isStatusStale(updatedAt: Long, now: Long = System.currentTimeMillis
     updatedAt <= 0L || now - updatedAt > STALE_AFTER_MS
 
 /** 확인 질문(UI-W3)에 응답이 없으면 보호자 알림으로 넘어가기까지의 시간. */
-private const val CHECK_IN_COUNTDOWN_MS = 15_000L
+private const val CHECK_IN_COUNTDOWN_MS = 30_000L
 
 /** 위험 감지 흐름: 평소(길안내) → 확인 질문(UI-W3) → 보호자 알림(UI-W4). */
 private enum class AlertStage {
@@ -119,6 +128,7 @@ fun WearApp() {
     var lastReceivedAt by remember { mutableStateOf(0L) }
     var routeMap by remember { mutableStateOf<RouteMapState?>(null) }
     var mapBackground by remember { mutableStateOf<MapBackground?>(null) }
+    var releaseSignalAt by remember { mutableStateOf(0L) }
     val scope = rememberCoroutineScope()
 
     // 최신 센서 값을 폰의 WearDataRelayService로 전달한다. AI 서버 연동은 아직 구현되지 않았다.
@@ -220,6 +230,9 @@ fun WearApp() {
                     when (event.dataItem.uri.path) {
                         PATH_STATUS -> applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
                         PATH_MAP -> applyMapDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                        PATH_RELEASE ->
+                            releaseSignalAt =
+                                DataMapItem.fromDataItem(event.dataItem).dataMap.getLong("updatedAt")
                     }
                 }
             }
@@ -265,6 +278,13 @@ fun WearApp() {
         alertStage = AlertStage.Alerted
     }
 
+    // 폰에서 해제 신호가 오면 위험상황 화면을 닫고 평소 화면(길안내)으로 돌아간다.
+    LaunchedEffect(releaseSignalAt) {
+        if (alertStage == AlertStage.Alerted && shouldReleaseAlert(releaseSignalAt, helpRequestedAt)) {
+            alertStage = AlertStage.None
+        }
+    }
+
     LaunchedEffect(alertStage, checkInStartedAt) {
         if (alertStage != AlertStage.CheckIn) return@LaunchedEffect
         while (true) {
@@ -291,18 +311,18 @@ fun WearApp() {
                 AlertStage.Alerted ->
                     GuardianAlertedScreen(
                         requestedAt = helpRequestedAt,
-                        onDismiss = { alertStage = AlertStage.None },
+                        onTestRelease = { alertStage = AlertStage.None },
                     )
                 AlertStage.None -> MainScreen(
                     status = status,
                     routeMap = routeMap,
                     mapBackground = mapBackground,
                     screenTint = screenTint,
-                    onSos = { WatchSosSender.send(context) },
+                    // 명세: SOS는 어느 상태에서든 바로 위험상황으로 보낸다.
+                    onSos = { requestHelp() },
                     onShieldLongPress = { startCheckIn() },
                 )
             }
-            if (alertStage != AlertStage.None) TimeText()
         }
     }
 }
@@ -328,10 +348,7 @@ private fun MainScreen(
                 if (page == 0) {
                     GuidancePage(status, routeMap, mapBackground)
                 } else {
-                    Box(Modifier.fillMaxSize()) {
-                        MovingStatusPage(onShieldLongPress = onShieldLongPress)
-                        TimeText()
-                    }
+                    MovingStatusPage(onShieldLongPress = onShieldLongPress)
                 }
             }
         } else {
