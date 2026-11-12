@@ -75,6 +75,54 @@ class TurnGuidanceTest {
         assertEquals("120m 후 우회전", turnBannerText(NextTurn(TurnDirection.Right, 118.0)))
         assertEquals("지금 좌회전", turnBannerText(NextTurn(TurnDirection.Left, 8.0)))
         assertEquals("650m 직진", turnBannerText(NextTurn(TurnDirection.Straight, 650.0)))
-        assertEquals("우회전하세요", turnInstruction(NextTurn(TurnDirection.Right, 50.0)))
+        assertEquals("80m 후 오른쪽 방향", turnBannerText(NextTurn(TurnDirection.SlightRight, 80.0)))
+        assertEquals("지금 유턴", turnBannerText(NextTurn(TurnDirection.UTurn, 5.0)))
+    }
+
+    // ---- 폰이 보낸 회전 안내 목록(routeSteps) ----
+
+    private val steps =
+        listOf(
+            RouteStep(37.000 to 127.000, "depart", ""),
+            RouteStep(37.001 to 127.000, "turn", "right"),
+            RouteStep(37.001 to 127.0012, "arrive", ""),
+        )
+
+    @Test
+    fun decodeRouteSteps_readsThePhoneFormat() {
+        val decoded = decodeRouteSteps("37.000000,127.000000,depart,;37.001000,127.000000,turn,slight left")
+        assertEquals(2, decoded.size)
+        assertEquals("depart", decoded[0].type)
+        assertEquals("", decoded[0].modifier)
+        assertEquals(TurnDirection.SlightLeft, stepDirection(decoded[1]))
+        assertTrue(decodeRouteSteps(null).isEmpty())
+        assertTrue(decodeRouteSteps("고장난값").isEmpty())
+    }
+
+    @Test
+    fun steps_reportTheNextTurnAndItsDistance() {
+        val turn = computeNextTurnFromSteps(rightTurn, steps, alongMeters = 50.0)!!
+        assertEquals(TurnDirection.Right, turn.direction)
+        assertEquals(61.19, turn.distanceMeters, 1.0)
+    }
+
+    @Test
+    fun steps_afterTheLastTurn_goStraightToTheEnd() {
+        val turn = computeNextTurnFromSteps(rightTurn, steps, alongMeters = 120.0)!!
+        assertEquals(TurnDirection.Straight, turn.direction)
+        assertEquals(98.0, turn.distanceMeters, 3.0)
+    }
+
+    @Test
+    fun steps_thatAreNotTurns_areSkipped() {
+        val withContinue =
+            listOf(
+                RouteStep(37.000 to 127.000, "depart", ""),
+                RouteStep(37.0005 to 127.000, "new name", "straight"),
+                RouteStep(37.001 to 127.000, "turn", "left"),
+            )
+        val turn = computeNextTurnFromSteps(leftTurn, withContinue, alongMeters = 0.0)!!
+        assertEquals(TurnDirection.Left, turn.direction)
+        assertEquals(111.19, turn.distanceMeters, 1.0)
     }
 }
