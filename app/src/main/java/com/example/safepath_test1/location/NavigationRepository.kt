@@ -2,16 +2,28 @@ package com.example.safepath_test1.location
 
 import android.content.Context
 import android.util.Log
+import com.example.safepath_test1.model.GeoPoint
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+/**
+ * 경로 위의 회전 지점 하나. Mapbox Directions 응답(steps=true)의 step.maneuver에서 꺼낸다.
+ * [type]은 "turn", "depart", "arrive" 등, [modifier]는 "left", "slight right", "uturn" 등(없을 수 있음).
+ * 워치의 회전 안내("120m 후 우회전")에 쓴다.
+ */
+data class RouteManeuver(val point: GeoPoint, val type: String, val modifier: String?)
+
 data class RouteResult(
     val geoJsonLineString: String,
     val distanceMeters: Double,
     val safetyFacilityScore: Double = 0.0,
+    /** 회전 지점 목록(경로 순서). 응답에 없으면 비어 있다. */
+    val maneuvers: List<RouteManeuver> = emptyList(),
+    /** 걸어서 걸리는 예상 시간(초). 응답에 없으면 null. */
+    val durationSeconds: Double? = null,
 )
 
 data class MultiRouteResult(
@@ -157,7 +169,7 @@ object NavigationRepository {
         var connection: HttpURLConnection? = null
         return try {
             val url =
-                "https://api.mapbox.com/directions/v5/mapbox/walking/$originLng,$originLat;$destLng,$destLat?alternatives=true&geometries=geojson&overview=full&access_token=$accessToken"
+                "https://api.mapbox.com/directions/v5/mapbox/walking/$originLng,$originLat;$destLng,$destLat?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=$accessToken"
             connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 5_000
@@ -176,7 +188,17 @@ object NavigationRepository {
                             val geometry = route.optJSONObject("geometry")?.toString().orEmpty()
                             val distance = route.optDouble("distance", Double.NaN)
                             if (geometry.isNotBlank() && distance.isFinite() && distance >= 0.0)
-                                add(RouteResult(geometry, distance))
+                                add(
+                                    RouteResult(
+                                        geoJsonLineString = geometry,
+                                        distanceMeters = distance,
+                                        maneuvers = parseManeuvers(route),
+                                        durationSeconds =
+                                            route.optDouble("duration", Double.NaN).takeIf {
+                                                it.isFinite() && it >= 0.0
+                                            },
+                                    )
+                                )
                         }
                 }
             }
@@ -185,6 +207,35 @@ object NavigationRepository {
             emptyList()
         } finally {
             connection?.disconnect()
+        }
+    }
+
+    /**
+     * 경로 하나의 legs[].steps[].maneuver에서 회전 지점을 순서대로 꺼낸다.
+     * 형식이 예상과 다르면 그 단계만 건너뛰고, 아예 없으면 빈 목록이라 워치는 예전처럼 경로 모양으로 추측한다.
+     */
+    private fun parseManeuvers(route: JSONObject): List<RouteManeuver> {
+        val legs = route.optJSONArray("legs") ?: return emptyList()
+        return buildList {
+            for (legIndex in 0 until legs.length()) {
+                val steps = legs.optJSONObject(legIndex)?.optJSONArray("steps") ?: continue
+                for (stepIndex in 0 until steps.length()) {
+                    val maneuver = steps.optJSONObject(stepIndex)?.optJSONObject("maneuver") ?: continue
+                    val location = maneuver.optJSONArray("location") ?: continue
+                    // Mapbox 좌표는 [경도, 위도] 순서다.
+                    val longitude = location.optDouble(0, Double.NaN)
+                    val latitude = location.optDouble(1, Double.NaN)
+                    val type = maneuver.optString("type")
+                    if (!latitude.isFinite() || !longitude.isFinite() || type.isBlank()) continue
+                    add(
+                        RouteManeuver(
+                            point = GeoPoint(latitude, longitude),
+                            type = type,
+                            modifier = maneuver.optString("modifier").ifBlank { null },
+                        )
+                    )
+                }
+            }
         }
     }
 }

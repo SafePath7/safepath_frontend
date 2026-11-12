@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.wear.compose.material.Text
@@ -38,7 +39,10 @@ internal const val MAX_PAN_METERS = 250.0
 /** 손을 뗀 뒤 이 시간(ms)이 지나면 지도가 내 위치로 돌아온다. */
 internal const val PAN_RETURN_DELAY_MS = 8_000L
 
-/** 회전 화살표. 직진은 위쪽 화살표, 우회전/좌회전은 꺾인 화살표(좌회전은 좌우 반전). */
+/**
+ * 회전 화살표. 직진은 위쪽 화살표, 우회전/좌회전은 꺾인 화살표(좌회전은 좌우 반전),
+ * 완만한 회전은 기울어진 화살표, 유턴은 뒤집힌 U 모양.
+ */
 @Composable
 internal fun TurnIcon(
     direction: TurnDirection,
@@ -49,11 +53,11 @@ internal fun TurnIcon(
         val w = size.width
         val h = size.height
         val mirror = direction == TurnDirection.Left
+        val stroke = Stroke(width = w * 0.14f, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
         fun point(x: Float, y: Float) = Offset((if (mirror) 1f - x else x) * w, y * h)
 
-        val stroke = Stroke(width = w * 0.14f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        if (direction == TurnDirection.Straight) {
+        fun drawStraightArrow() {
             drawLine(
                 color = color,
                 start = Offset(w * 0.5f, h * 0.92f),
@@ -70,31 +74,60 @@ internal fun TurnIcon(
                 },
                 color,
             )
-        } else {
-            drawPath(
-                Path().apply {
-                    val start = point(0.32f, 0.92f)
-                    val corner = point(0.32f, 0.45f)
-                    val end = point(0.62f, 0.45f)
-                    moveTo(start.x, start.y)
-                    lineTo(corner.x, corner.y)
-                    lineTo(end.x, end.y)
-                },
-                color,
-                style = stroke,
-            )
-            drawPath(
-                Path().apply {
-                    val tip = point(0.94f, 0.45f)
-                    val top = point(0.62f, 0.20f)
-                    val bottom = point(0.62f, 0.70f)
-                    moveTo(tip.x, tip.y)
-                    lineTo(top.x, top.y)
-                    lineTo(bottom.x, bottom.y)
-                    close()
-                },
-                color,
-            )
+        }
+
+        when (direction) {
+            TurnDirection.Straight -> drawStraightArrow()
+            TurnDirection.SlightLeft -> rotate(-40f) { drawStraightArrow() }
+            TurnDirection.SlightRight -> rotate(40f) { drawStraightArrow() }
+            TurnDirection.UTurn -> {
+                drawPath(
+                    Path().apply {
+                        moveTo(w * 0.68f, h * 0.92f)
+                        lineTo(w * 0.68f, h * 0.45f)
+                        cubicTo(w * 0.68f, h * 0.16f, w * 0.32f, h * 0.16f, w * 0.32f, h * 0.45f)
+                        lineTo(w * 0.32f, h * 0.60f)
+                    },
+                    color,
+                    style = stroke,
+                )
+                drawPath(
+                    Path().apply {
+                        moveTo(w * 0.32f, h * 0.90f)
+                        lineTo(w * 0.10f, h * 0.60f)
+                        lineTo(w * 0.54f, h * 0.60f)
+                        close()
+                    },
+                    color,
+                )
+            }
+            TurnDirection.Left,
+            TurnDirection.Right -> {
+                drawPath(
+                    Path().apply {
+                        val start = point(0.32f, 0.92f)
+                        val corner = point(0.32f, 0.45f)
+                        val end = point(0.62f, 0.45f)
+                        moveTo(start.x, start.y)
+                        lineTo(corner.x, corner.y)
+                        lineTo(end.x, end.y)
+                    },
+                    color,
+                    style = stroke,
+                )
+                drawPath(
+                    Path().apply {
+                        val tip = point(0.94f, 0.45f)
+                        val top = point(0.62f, 0.20f)
+                        val bottom = point(0.62f, 0.70f)
+                        moveTo(tip.x, tip.y)
+                        lineTo(top.x, top.y)
+                        lineTo(bottom.x, bottom.y)
+                        close()
+                    },
+                    color,
+                )
+            }
         }
     }
 }

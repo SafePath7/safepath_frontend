@@ -211,6 +211,11 @@ fun HomeScreen(
                 routeLineGeoJson = route.geoJsonLineString,
                 destinationPoint = destinationPoint,
                 currentPoint = currentLocation,
+                // 워치의 회전 안내("120m 후 우회전")용. 응답에 없으면 비어 있고 워치가 경로 모양으로 추측한다.
+                routeSteps =
+                    route.maneuvers.map {
+                        com.example.safepath_test1.wear.WearRouteStep(it.point, it.type, it.modifier)
+                    },
             )
         } else {
             com.example.safepath_test1.wear.WearMessenger.sendIdle(context)

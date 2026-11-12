@@ -23,18 +23,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +53,7 @@ import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val TAG = "WearApp"
@@ -101,6 +101,8 @@ private data class RouteMapState(
     val points: List<LatLng>,
     val destination: LatLng?,
     val current: LatLng?,
+    /** 폰이 길찾기 서비스에서 받아 보낸 회전 안내. 아직 안 보내는 폰이면 비어 있다. */
+    val steps: List<RouteStep> = emptyList(),
 )
 
 /** Reverses WearMessenger's "lat,lng;lat,lng;..." encoding. */
@@ -156,12 +158,6 @@ fun WearApp() {
     }
     DisposableEffect(Unit) { onDispose { voiceRecorder.stop() } }
 
-    // Live mic level while navigating, used to tint the whole screen below so the "is it
-    // actually picking up sound" indicator is easy to notice at a glance (a small dot wasn't).
-    val audioLevel by voiceRecorder.audioLevel.collectAsState()
-    val screenTint =
-        if (isNavigating) lerp(WatchColors.Bg, Color(0xFFA5D6A7), audioLevel) else Color.Black
-
     fun applyDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
         val updatedAt = dataMap.getLong("updatedAt")
         lastReceivedAt = updatedAt
@@ -191,7 +187,8 @@ fun WearApp() {
             } else {
                 null
             }
-        routeMap = if (points.size >= 2) RouteMapState(points, destination, current) else null
+        val steps = decodeRouteSteps(dataMap.getString("routeSteps"))
+        routeMap = if (points.size >= 2) RouteMapState(points, destination, current, steps) else null
 
         Log.i(TAG, "New status=$status")
     }
@@ -317,7 +314,6 @@ fun WearApp() {
                     status = status,
                     routeMap = routeMap,
                     mapBackground = mapBackground,
-                    screenTint = screenTint,
                     // 명세: SOS는 어느 상태에서든 바로 위험상황으로 보낸다.
                     onSos = { requestHelp() },
                     onShieldLongPress = { startCheckIn() },
@@ -333,13 +329,13 @@ private fun MainScreen(
     status: RouteStatus,
     routeMap: RouteMapState?,
     mapBackground: MapBackground?,
-    screenTint: Color,
     onSos: () -> Unit,
     onShieldLongPress: () -> Unit,
 ) {
     val isNavigating = status is RouteStatus.Found
     Box(
-        modifier = Modifier.fillMaxSize().background(screenTint),
+        modifier =
+            Modifier.fillMaxSize().background(if (isNavigating) WatchColors.Bg else Color.Black),
         contentAlignment = Alignment.Center,
     ) {
         if (status is RouteStatus.Found) {
@@ -401,7 +397,7 @@ private const val ARRIVED_METERS = 20.0
  * UI-W1(W-01) 경로 안내 페이지(전체 화면 지도 초안).
  * 화면 전체를 지도가 채우고(한 손가락으로 끌어서 둘러보기, 두 손가락 핀치로 확대/축소, 두 번 탭하면 내 위치로) 그 위에 링, 시각, 이동중 배지, 위쪽 회전 안내 상자(y80),
  * 아래쪽에 남은 거리 한 줄을 올린다. 위치는 명세의 384dp 원형 기준을 화면 크기에 맞게 줄여 쓴다.
- * 다음 회전은 폰이 보낸 경로 모양에서 워치가 직접 계산한다(실제 턴바이턴 문구는 13주차 이후).
+ * 다음 회전은 폰이 회전 안내 목록(routeSteps)을 보내면 그걸 쓰고, 없으면 경로 모양에서 워치가 추측한다.
  * SOS 버튼은 MainScreen이 하단에 따로 붙인다.
  */
 @Composable
@@ -412,21 +408,32 @@ private fun GuidancePage(
 ) {
     val s = rememberWatchScale()
     // 손가락으로 지도를 둘러보는 상태: 보는 지름(핀치)과 내 위치에서 옮긴 거리(끌기).
-    var viewMeters by remember { mutableStateOf(DEFAULT_VIEW_METERS) }
-    var panEastMeters by remember { mutableStateOf(0.0) }
-    var panNorthMeters by remember { mutableStateOf(0.0) }
-    var lastTouchAt by remember { mutableStateOf(0L) }
+    // 값은 지도가 그려질 때만 읽어서, 끌거나 확대해도 이 화면 전체가 아니라 지도 그림만 다시 그려진다.
+    val mapView = remember { MapViewState() }
     // 손을 떼고 잠시 지나면 지도가 다시 내 위치를 따라간다(확대 정도는 유지).
-    LaunchedEffect(lastTouchAt) {
-        if (lastTouchAt == 0L) return@LaunchedEffect
-        delay(PAN_RETURN_DELAY_MS)
-        panEastMeters = 0.0
-        panNorthMeters = 0.0
+    LaunchedEffect(mapView) {
+        snapshotFlow { mapView.lastTouchAt }
+            .collectLatest { touchedAt ->
+                if (touchedAt == 0L) return@collectLatest
+                delay(PAN_RETURN_DELAY_MS)
+                mapView.returnToCurrent()
+            }
     }
     val progress = remember(routeMap) { routeMap?.let { computeRouteProgress(it.points, it.current) } }
     // 현재 위치가 와야 남은 거리·다음 회전·도착 시각을 알 수 있다. 아직이면 경로 전체 거리만 보여 준다.
     val live = if (routeMap?.current != null) progress else null
-    val turn = remember(routeMap) { live?.let { computeNextTurn(routeMap!!.points, it.traveledMeters) } }
+    // 폰이 실제 회전 안내를 보내 주면 그걸 쓰고, 없으면 경로 선이 꺾인 모양으로 추측한다.
+    val turn =
+        remember(routeMap) {
+            live?.let { progress ->
+                val map = routeMap!!
+                if (map.steps.isNotEmpty()) {
+                    computeNextTurnFromSteps(map.points, map.steps, progress.traveledMeters)
+                } else {
+                    computeNextTurn(map.points, progress.traveledMeters)
+                }
+            }
+        }
     val arrived = live != null && live.remainingMeters < ARRIVED_METERS
 
     val bannerDirection = if (arrived || turn == null) TurnDirection.Straight else turn.direction
@@ -448,11 +455,9 @@ private fun GuidancePage(
                 routePoints = map.points,
                 destination = map.destination,
                 current = map.current,
+                view = mapView,
                 modifier = Modifier.fillMaxSize(),
                 background = mapBackground,
-                viewMeters = viewMeters,
-                panEastMeters = panEastMeters,
-                panNorthMeters = panNorthMeters,
             )
             // 끌기/핀치를 받는 투명 영역. 위쪽 시각·배지와 아래쪽 글자·SOS 영역은 빼서,
             // 그 위에서 옆으로 쓸면 기존처럼 다음 페이지로 넘어간다.
@@ -461,27 +466,22 @@ private fun GuidancePage(
                     .padding(top = s.dp(70), bottom = s.sosReservedHeight() + s.dp(40))
                     // 두 번 탭하면 바로 내 위치, 기본 확대로 돌아온다.
                     .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                panEastMeters = 0.0
-                                panNorthMeters = 0.0
-                                viewMeters = DEFAULT_VIEW_METERS
-                            }
-                        )
+                        detectTapGestures(onDoubleTap = { mapView.reset() })
                     }
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
-                            val metersPerPx = viewMeters / size.width
+                            val metersPerPx = mapView.viewMeters / size.width
                             // 손가락을 오른쪽으로 끌면 지도가 오른쪽으로 가니까 보는 위치는 서쪽으로 간다.
-                            panEastMeters =
-                                (panEastMeters - pan.x * metersPerPx)
+                            mapView.panEastMeters =
+                                (mapView.panEastMeters - pan.x * metersPerPx)
                                     .coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
-                            panNorthMeters =
-                                (panNorthMeters + pan.y * metersPerPx)
+                            mapView.panNorthMeters =
+                                (mapView.panNorthMeters + pan.y * metersPerPx)
                                     .coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
                             // 두 손가락을 벌리면(zoom > 1) 더 가까이, 모으면 더 넓게.
-                            viewMeters = (viewMeters / zoom).coerceIn(MIN_VIEW_METERS, MAX_VIEW_METERS)
-                            lastTouchAt = System.currentTimeMillis()
+                            mapView.viewMeters =
+                                (mapView.viewMeters / zoom).coerceIn(MIN_VIEW_METERS, MAX_VIEW_METERS)
+                            mapView.lastTouchAt = System.currentTimeMillis()
                         }
                     }
             )
