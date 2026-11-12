@@ -26,8 +26,11 @@ private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
 private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
 
-/** Roughly how much raw audio each chunk holds before being handed off to WatchVoiceSender. */
-private const val CHUNK_DURATION_MS = 1_500L
+/**
+ * Roughly how much raw audio each chunk holds before being handed off to WatchVoiceSender.
+ * 1초: 위험 감지가 늦어지지 않게 짧게 자른다. 폰이 조각을 이어 붙여 최근 3초를 만든다(WearVoiceRelayService).
+ */
+private const val CHUNK_DURATION_MS = 1_000L
 
 /**
  * RMS value (on the raw 16-bit PCM scale) that maps to a normalized level of 1.0. Normal speaking
@@ -40,9 +43,8 @@ private const val LEVEL_NORMALIZATION_CEILING = 4000.0
 /**
  * Captures raw PCM audio from the watch's microphone in short chunks while route guidance is
  * active (started/stopped from WearApp.kt based on RouteStatus). No speech-to-text here - this
- * just hands off raw audio bytes; WatchVoiceSender relays each chunk to the phone the same way
- * WatchMotionSender relays sensor readings, just over a DataClient Asset instead of a DataMap
- * field since a chunk is far bigger than a few floats.
+ * just hands off raw audio bytes; WatchVoiceSender compresses each chunk to AAC and relays it to
+ * the phone the same way WatchMotionSender relays sensor readings.
  */
 class WatchVoiceRecorder(private val context: Context) {
 
