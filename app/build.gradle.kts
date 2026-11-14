@@ -46,6 +46,9 @@ val friendsApiBaseUrl =
         .trim()
         .trimEnd('/')
 
+val backendApiBaseUrl = providers.gradleProperty("SAFEPATH_API_BASE_URL")
+    .orElse(localProperties.getProperty("SAFEPATH_API_BASE_URL") ?: "").get().trim().trimEnd('/')
+
 // 디버그 전용 로컬 테스트 설정. 운영 빌드에는 전달하지 않는다.
 val testServerUrl = localProperties.getProperty("SAFEPATH_TEST_URL", "").trim()
 val testServerToken = localProperties.getProperty("SAFEPATH_TEST_TOKEN", "").trim()
@@ -70,14 +73,18 @@ android {
         resValue("string", "kakao_rest_api_key", kakaoRestApiKey)
         resValue("string", "kakao_native_app_key", kakaoNativeAppKey)
         resValue("string", "friends_api_base_url", friendsApiBaseUrl)
+        resValue("string", "public_data_api_key", localProperties.getProperty("PUBLIC_DATA_API_KEY", "").trim())
+        resValue("string", "safemap_api_key", localProperties.getProperty("SAFEMAP_API_KEY", "").trim().replace("\"", ""))
     }
 
     buildTypes {
         debug {
+            resValue("string", "safepath_api_base_url", backendApiBaseUrl.ifBlank { "http://10.0.2.2:8080" })
             resValue("string", "safepath_test_url", testServerUrl)
             resValue("string", "safepath_test_token", testServerToken)
         }
         release {
+            resValue("string", "safepath_api_base_url", backendApiBaseUrl)
             resValue("string", "safepath_test_url", "")
             resValue("string", "safepath_test_token", "")
             optimization {
@@ -92,6 +99,7 @@ android {
     buildFeatures {
         compose = true
         resValues = true
+        buildConfig = true
     }
 }
 
@@ -99,6 +107,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     implementation("androidx.activity:activity-compose:1.10.1")

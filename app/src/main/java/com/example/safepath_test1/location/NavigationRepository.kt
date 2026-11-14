@@ -1,13 +1,9 @@
 package com.example.safepath_test1.location
 
 import android.content.Context
-import android.util.Log
 import com.example.safepath_test1.model.GeoPoint
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 /**
  * 경로 위의 회전 지점 하나. Mapbox Directions 응답(steps=true)의 step.maneuver에서 꺼낸다.
@@ -20,10 +16,16 @@ data class RouteResult(
     val geoJsonLineString: String,
     val distanceMeters: Double,
     val safetyFacilityScore: Double = 0.0,
+    val cctvCount: Int = 0,
+    val streetlightCount: Int = 0,
     /** 회전 지점 목록(경로 순서). 응답에 없으면 비어 있다. */
     val maneuvers: List<RouteManeuver> = emptyList(),
     /** 걸어서 걸리는 예상 시간(초). 응답에 없으면 null. */
     val durationSeconds: Double? = null,
+    val geometryPoints: List<GeoPoint> = emptyList(),
+    val snapDistancesMeters: List<Double> = emptyList(),
+    val safetyMetrics: RouteSafetyMetrics? = null,
+    val routeWarnings: List<String> = emptyList(),
 )
 
 data class MultiRouteResult(
@@ -33,77 +35,42 @@ data class MultiRouteResult(
     val errorMessage: String? = null,
     val candidateRouteCount: Int = 0,
     val noticeMessage: String? = null,
-)
+    val diagnostics: RouteSearchDiagnostics? = null,
+) {
+    internal fun duplicateRouteLabel(): String? =
+        listOf("추천" to recommendedRoute, "안전" to safeRoute, "최단" to shortestRoute)
+            .mapNotNull { (name, route) -> route?.geoJsonLineString?.takeIf { it.isNotBlank() }?.let { name to it } }
+            .groupBy({ it.second }, { it.first })
+            .values.filter { it.size > 1 }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" / ") { "${it.joinToString("·")} 동일" }
+}
 
 object NavigationRepository {
-    private const val tag = "NavigationRepository"
+    internal const val recommendedSafetyWeight = 0.65
+
+    @Volatile private var routingClient: Pair<String, MapboxWalkingClient>? = null
 
     suspend fun fetchMultiRoutes(
-        context: Context,
-        accessToken: String,
-        originLat: Double,
-        originLng: Double,
-        destLat: Double,
-        destLng: Double,
-    ): MultiRouteResult =
-        withContext(Dispatchers.IO) {
-            if (accessToken.isBlank()) {
-                Log.e(tag, "Mapbox access token is blank")
-                return@withContext MultiRouteResult(
-                    null,
-                    null,
-                    null,
-                    errorMessage = "지도 서비스 설정을 확인해 주세요.",
-                )
-            }
-            val candidates =
-                fetchWalkingRoutes(accessToken, originLat, originLng, destLat, destLng).distinctBy {
-                    it.geoJsonLineString
-                }
-            val shortestRoute =
-                candidates.minByOrNull { it.distanceMeters }
-                    ?: return@withContext MultiRouteResult(
-                        null,
-                        null,
-                        null,
-                        errorMessage = "경로를 찾지 못했습니다. 네트워크와 위치를 확인해 주세요.",
-                    )
-            val scoredCandidates =
-                try {
-                    candidates.map {
-                        it.copy(
-                            safetyFacilityScore =
-                                SafetyRepository.scoreRouteFacilities(
-                                    context = context,
-                                    routeGeoJson = it.geoJsonLineString,
-                                    routeDistanceMeters = it.distanceMeters,
-                                )
-                        )
-                    }
-                } catch (exception: Exception) {
-                    Log.e(
-                        tag,
-                        "Failed to score walking routes with safety facilities; using shortest route",
-                        exception,
-                    )
-                    return@withContext MultiRouteResult(
-                        safeRoute = shortestRoute,
-                        shortestRoute = shortestRoute,
-                        recommendedRoute = shortestRoute,
-                        candidateRouteCount = candidates.size,
-                        noticeMessage = "안전시설 분석에 실패해 최단 경로를 공통으로 표시합니다.",
-                    )
-                }
-            selectRoutes(scoredCandidates)
+        context: Context, accessToken: String, originLat: Double, originLng: Double,
+        destLat: Double, destLng: Double,
+    ): MultiRouteResult {
+        if (accessToken.isBlank()) return MultiRouteResult(null,null,null,errorMessage="지도 서비스 설정을 확인해 주세요.")
+        val source = synchronized(this) {
+            routingClient?.takeIf { it.first == accessToken }?.second
+                ?: MapboxWalkingClient(accessToken).also { routingClient = accessToken to it }
         }
+        return RouteSearchEngine(source).search(GeoPoint(originLat,originLng),GeoPoint(destLat,destLng)) {
+            withContext(Dispatchers.IO) {
+                SafetyRepository.getCctvFacilities(context) to SafetyRepository.getStreetlightFacilities(context)
+            }
+        }
+    }
 
-    /**
-     * 시설 밀도와 우회 정도를 비교 가능한 0~1 범위로 정규화해 경로를 선택한다.
-     * 원래 시설 밀도가 고정 우회 점수보다 지나치게 커 두 추천 결과가 같아지는 문제를 방지한다.
-     */
+    /** Absolute facility coverage proxy and fastest-time/route-time efficiency; no candidate min-max rescaling. */
     internal fun selectRoutes(candidates: List<RouteResult>): MultiRouteResult {
         if (candidates.isEmpty()) return MultiRouteResult(null, null, null)
-        val shortestRoute = candidates.minByOrNull { it.distanceMeters } ?: candidates.first()
+        val shortestRoute = candidates.minByOrNull { travelSeconds(it) } ?: candidates.first()
         if (candidates.size == 1) {
             return MultiRouteResult(
                 safeRoute = shortestRoute,
@@ -114,32 +81,21 @@ object NavigationRepository {
             )
         }
 
-        val minSafety = candidates.minOf { it.safetyFacilityScore }
-        val maxSafety = candidates.maxOf { it.safetyFacilityScore }
-        if (maxSafety <= 0.0) {
-            return MultiRouteResult(
-                safeRoute = shortestRoute,
-                shortestRoute = shortestRoute,
-                recommendedRoute = shortestRoute,
-                candidateRouteCount = candidates.size,
-                noticeMessage = "후보 경로 주변의 안전시설 자료가 없어 최단 경로를 공통으로 표시합니다.",
-            )
+        if (candidates.maxOf { it.safetyFacilityScore } <= 0.0) {
+            return MultiRouteResult(shortestRoute,shortestRoute,shortestRoute,candidateRouteCount=candidates.size,
+                noticeMessage="시설 자료로 경로를 구분할 수 없습니다.")
         }
+        val fastestTime = travelSeconds(shortestRoute).coerceAtLeast(1.0)
+        fun safety(route: RouteResult) = (route.safetyFacilityScore / 100.0).coerceIn(0.0,1.0)
+        fun timeEfficiency(route: RouteResult) = (fastestTime / travelSeconds(route).coerceAtLeast(1.0)).coerceIn(0.0,1.0)
 
-        val minDistance = candidates.minOf { it.distanceMeters }
-        val maxDistance = candidates.maxOf { it.distanceMeters }
-        fun normalized(value: Double, min: Double, max: Double): Double =
-            if (max <= min) 1.0 else ((value - min) / (max - min)).coerceIn(0.0, 1.0)
-        fun safety(route: RouteResult) = normalized(route.safetyFacilityScore, minSafety, maxSafety)
-        fun distance(route: RouteResult) =
-            1.0 - normalized(route.distanceMeters, minDistance, maxDistance)
-
-        // 안전 경로는 시설 밀도를 우선하고 추천 경로는 안전과 거리를 함께 고려한다.
-        // 최단 경로는 거리만 기준으로 선택한다.
+        // 안전은 구간 커버리지 지표 최우선, 동점만 시간으로 결정. 추천은 안전 65%, 시간 효율 35%를 반영한다.
         val safeRoute =
-            candidates.maxByOrNull { safety(it) * 0.8 + distance(it) * 0.2 } ?: shortestRoute
+            candidates.sortedWith(compareByDescending<RouteResult> { it.safetyFacilityScore }.thenBy { travelSeconds(it) }).firstOrNull() ?: shortestRoute
         val recommendedRoute =
-            candidates.maxByOrNull { safety(it) * 0.5 + distance(it) * 0.5 } ?: shortestRoute
+            candidates.maxByOrNull {
+                safety(it) * recommendedSafetyWeight + timeEfficiency(it) * (1.0 - recommendedSafetyWeight)
+            } ?: shortestRoute
         val selectedGeometryCount =
             listOf(safeRoute, shortestRoute, recommendedRoute)
                 .distinctBy { it.geoJsonLineString }
@@ -159,83 +115,8 @@ object NavigationRepository {
         )
     }
 
-    private fun fetchWalkingRoutes(
-        accessToken: String,
-        originLat: Double,
-        originLng: Double,
-        destLat: Double,
-        destLng: Double,
-    ): List<RouteResult> {
-        var connection: HttpURLConnection? = null
-        return try {
-            val url =
-                "https://api.mapbox.com/directions/v5/mapbox/walking/$originLng,$originLat;$destLng,$destLat?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=$accessToken"
-            connection = URL(url).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 5_000
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(tag, "Mapbox walking route request failed: HTTP ${connection.responseCode}")
-                emptyList()
-            } else {
-                val routes =
-                    JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                        .optJSONArray("routes")
-                buildList {
-                    if (routes != null)
-                        for (index in 0 until routes.length()) {
-                            val route = routes.optJSONObject(index) ?: continue
-                            val geometry = route.optJSONObject("geometry")?.toString().orEmpty()
-                            val distance = route.optDouble("distance", Double.NaN)
-                            if (geometry.isNotBlank() && distance.isFinite() && distance >= 0.0)
-                                add(
-                                    RouteResult(
-                                        geoJsonLineString = geometry,
-                                        distanceMeters = distance,
-                                        maneuvers = parseManeuvers(route),
-                                        durationSeconds =
-                                            route.optDouble("duration", Double.NaN).takeIf {
-                                                it.isFinite() && it >= 0.0
-                                            },
-                                    )
-                                )
-                        }
-                }
-            }
-        } catch (exception: Exception) {
-            Log.e(tag, "Mapbox walking route network or response parsing failed", exception)
-            emptyList()
-        } finally {
-            connection?.disconnect()
-        }
-    }
+    // API 시간이 없으면 보행 속도 1.2m/s로 추정한다. UI에는 추정임을 표시한다.
+    internal fun travelSeconds(route: RouteResult): Double =
+        route.durationSeconds?.takeIf { it.isFinite() && it > 0 } ?: (route.distanceMeters / 1.2)
 
-    /**
-     * 경로 하나의 legs[].steps[].maneuver에서 회전 지점을 순서대로 꺼낸다.
-     * 형식이 예상과 다르면 그 단계만 건너뛰고, 아예 없으면 빈 목록이라 워치는 예전처럼 경로 모양으로 추측한다.
-     */
-    private fun parseManeuvers(route: JSONObject): List<RouteManeuver> {
-        val legs = route.optJSONArray("legs") ?: return emptyList()
-        return buildList {
-            for (legIndex in 0 until legs.length()) {
-                val steps = legs.optJSONObject(legIndex)?.optJSONArray("steps") ?: continue
-                for (stepIndex in 0 until steps.length()) {
-                    val maneuver = steps.optJSONObject(stepIndex)?.optJSONObject("maneuver") ?: continue
-                    val location = maneuver.optJSONArray("location") ?: continue
-                    // Mapbox 좌표는 [경도, 위도] 순서다.
-                    val longitude = location.optDouble(0, Double.NaN)
-                    val latitude = location.optDouble(1, Double.NaN)
-                    val type = maneuver.optString("type")
-                    if (!latitude.isFinite() || !longitude.isFinite() || type.isBlank()) continue
-                    add(
-                        RouteManeuver(
-                            point = GeoPoint(latitude, longitude),
-                            type = type,
-                            modifier = maneuver.optString("modifier").ifBlank { null },
-                        )
-                    )
-                }
-            }
-        }
-    }
 }

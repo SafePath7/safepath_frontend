@@ -173,17 +173,22 @@ class SignupViewModel internal constructor(
 
     /** Final synchronous guard immediately before the existing local onboarding write. */
     fun completeSignup(saveProfile: (uid: String, name: String, phone: String) -> Unit): Boolean {
-        if (!checkAccount() || !state.value.canComplete) return false
+        val details = verifiedSignup() ?: return false
+        saveProfile(details.first, details.second, details.third)
+        abandon()
+        return true
+    }
+
+    fun verifiedSignup(): Triple<String, String, String>? {
+        if (!checkAccount() || !state.value.canComplete) return null
         val phone = verifiedPhone
         val account = backend.currentAccount()
         if (phone == null || account?.phone != phone || normalizeKoreanPhoneNumber(state.value.phone) != phone) {
             clearVerification()
             mutableState.update { it.copy(phase = SignupPhase.FAILED, error = "전화번호를 다시 인증해 주세요.") }
-            return false
+            return null
         }
-        saveProfile(checkNotNull(ownerUid), state.value.name.trim(), phone)
-        abandon()
-        return true
+        return Triple(checkNotNull(ownerUid), state.value.name.trim(), phone)
     }
 
     fun abandon() {

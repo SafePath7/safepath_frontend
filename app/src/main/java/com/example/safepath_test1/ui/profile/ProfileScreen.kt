@@ -23,6 +23,11 @@ import com.example.safepath_test1.ui.guardian.readGuardians
 import com.example.safepath_test1.ui.settings.SettingsScreen
 import com.example.safepath_test1.ui.theme.*
 import com.google.firebase.auth.FirebaseAuth
+import com.example.safepath_test1.api.AccountRepository
+import com.example.safepath_test1.api.AccountProfile
+import com.example.safepath_test1.api.accountErrorMessage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(
@@ -66,8 +71,71 @@ fun ProfileScreen(
     )
     val prefs = remember { context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE) }
     val user = FirebaseAuth.getInstance().currentUser
-    val name = prefs.getString("user_name", null) ?: user?.displayName ?: "사용자"
-    val phone = prefs.getString("user_phone", null) ?: "전화번호 미등록"
+    val repository = remember(context) { AccountRepository(context) }
+    val scope = rememberCoroutineScope()
+    var serverProfile by remember(user?.uid) { mutableStateOf<AccountProfile?>(null) }
+    var accountError by remember(user?.uid) { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf<String?>(null) }
+    var editedName by remember { mutableStateOf("") }
+    suspend fun refreshProfile() {
+        val result = repository.profile()
+        serverProfile = result
+        prefs.edit().putString("user_name", result.name).putString("user_phone", result.phoneNumber).apply()
+    }
+    LaunchedEffect(user?.uid) {
+        try { refreshProfile() }
+        catch (error: CancellationException) { throw error }
+        catch (error: Exception) { accountError = accountErrorMessage(error) }
+    }
+    val name = serverProfile?.name ?: prefs.getString("user_name", null) ?: user?.displayName ?: "사용자"
+    val phone = serverProfile?.phoneNumber ?: prefs.getString("user_phone", null) ?: "전화번호 미등록"
+    if (dialog != null) AlertDialog(
+        onDismissRequest = { if (!busy) dialog = null },
+        title = { Text(when (dialog) { "name" -> "회원정보 수정"; "phone" -> "전화번호 변경"; else -> "회원 탈퇴" }) },
+        text = {
+            when (dialog) {
+                "name" -> OutlinedTextField(editedName, { editedName = it }, label = { Text("이름") }, singleLine = true, enabled = !busy)
+                "phone" -> Text("전화번호 변경은 새 번호의 SMS 인증을 서버에서 확인하는 기능이 준비된 후 사용할 수 있습니다.")
+                else -> Text("서버의 회원정보를 삭제하고 로그아웃합니다. Google/Firebase 계정과 Firestore 친구 정보는 삭제되지 않습니다. 계속하시겠습니까?")
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy && (dialog != "name" || (editedName.isNotBlank() && editedName.trim().codePointCount(0, editedName.trim().length) <= 100)), onClick = {
+                when (dialog) {
+                    "phone" -> dialog = null
+                    "name" -> {
+                        busy = true
+                        scope.launch {
+                            try {
+                                repository.update(editedName)
+                                refreshProfile()
+                                accountError = null
+                                dialog = null
+                            } catch (error: CancellationException) { throw error }
+                            catch (error: Exception) { accountError = accountErrorMessage(error); dialog = null }
+                            finally { busy = false }
+                        }
+                    }
+                    else -> {
+                        busy = true
+                        scope.launch {
+                            try {
+                                repository.withdraw()
+                                if (FirebaseAuth.getInstance().currentUser?.uid == user?.uid) {
+                                    prefs.edit().remove("user_name").remove("user_phone").remove("onboarded_uid").apply()
+                                    onLogout()
+                                }
+                            } catch (error: CancellationException) { throw error }
+                            catch (error: Exception) { accountError = accountErrorMessage(error); dialog = null }
+                            finally { busy = false }
+                        }
+                    }
+                }
+            }) { Text(if (dialog == "phone") "확인" else if (dialog == "name") "저장" else "탈퇴") }
+        },
+        dismissButton = { if (dialog != "phone") TextButton(enabled = !busy, onClick = { dialog = null }) { Text("취소") } },
+    )
     val friends = remember { readGuardians(context).size }
     Column(
         modifier
@@ -129,6 +197,12 @@ fun ProfileScreen(
                     ProfileStat("$friends", "연결된 친구", Modifier.weight(1f))
                     ProfileStat("—", "보호 중", Modifier.weight(1f))
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { editedName = name; dialog = "name" }) { Text("정보 수정") }
+                    TextButton(onClick = { dialog = "phone" }) { Text("전화번호 변경") }
+                    TextButton(onClick = { dialog = "withdraw" }) { Text("회원 탈퇴") }
+                }
+                accountError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             }
         }
         Text("AI 위험 감지", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)

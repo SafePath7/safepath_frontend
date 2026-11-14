@@ -18,12 +18,15 @@ data class SessionStartRequest(
     val guardianIds: List<String>,
     val endPassword: String,
     val detectionSettings: DetectionSettings,
+    /** Local preparation geometry; server wire schema is not agreed yet. Never persisted with PIN. */
+    val selectedRouteGeoJson: String? = null,
+    val useBiometric: Boolean = false,
 ) {
     fun validationError(): String? = when {
         routeId.isBlank() -> "경로를 선택해 주세요."
         guardianIds.isEmpty() || guardianIds.any(String::isBlank) -> "수락된 보호자를 한 명 이상 선택해 주세요."
         guardianIds.distinct().size != guardianIds.size -> "보호자가 중복 선택됐어요."
-        !endPassword.matches(Regex("[0-9]{4}")) -> "종료 비밀번호는 숫자 4자리입니다."
+        !useBiometric && !endPassword.matches(Regex("[0-9]{4}")) -> "종료 비밀번호는 숫자 4자리입니다."
         else -> null
     }
     override fun toString() = "SessionStartRequest(routeId=$routeId, guardianCount=${guardianIds.size}, endPassword=[REDACTED])"

@@ -14,6 +14,17 @@ import org.json.JSONObject
 
 /** 디버그 빌드의 명시적 LAN 시험용. 운영 세션이나 긴급 신고 기능이 아니다. */
 object TestJourneyClient {
+    var biometricKeyAlias: String? = null
+    private var endPinDigest: ByteArray? = null
+    private var pinSalt = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+    fun setEndPin(pin: String) {
+        if (pin.isEmpty()) { endPinDigest = null; return }
+        require(pin.matches(Regex("[0-9]{4}")))
+        endPinDigest = java.security.MessageDigest.getInstance("SHA-256").digest(pinSalt + pin.toByteArray())
+    }
+    fun verifyEndPin(pin: String): Boolean = endPinDigest?.let {
+        java.security.MessageDigest.isEqual(it, java.security.MessageDigest.getInstance("SHA-256").digest(pinSalt + pin.toByteArray()))
+    } ?: false
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     @Volatile var active = false
@@ -115,7 +126,11 @@ object TestJourneyClient {
         val app = context.applicationContext
         worker.execute {
             val success = send(app, "end", null)
-            if (success) active = false
+            if (success) {
+                active = false; endPinDigest = null
+                biometricKeyAlias?.let { runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(it) } }
+                biometricKeyAlias = null
+            }
             main.post { done(success) }
         }
     }

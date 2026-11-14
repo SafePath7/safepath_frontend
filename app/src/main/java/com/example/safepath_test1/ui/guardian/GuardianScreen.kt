@@ -589,14 +589,25 @@ fun DepartureScreen(
     onBack: () -> Unit,
     testJourneyActive: Boolean,
     testJourneyPending: Boolean,
-    onTestJourneyStart: (List<String>) -> Unit,
+    onTestJourneyStart: (List<String>, String) -> Unit,
     onTestJourneyEnd: () -> Unit,
+    route: com.example.safepath_test1.location.RouteResult? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val guardians = remember { readServerFriends(context) }
     var selected by rememberSaveable { mutableStateOf(listOf<String>()) }
     var pin by remember { mutableStateOf("") }
+    var useBiometric by remember { mutableStateOf(com.example.safepath_test1.session.BiometricSessionSigner.isAvailable(context)) }
+    var authenticating by remember { mutableStateOf(false) }
+    var authenticationCancellation by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
+    val authenticationScopeActive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    DisposableEffect(Unit) {
+        onDispose {
+            authenticationScopeActive.set(false)
+            authenticationCancellation?.cancel()
+        }
+    }
     BackHandler(onBack = onBack)
     Column(
         modifier
@@ -620,7 +631,7 @@ fun DepartureScreen(
                     Text(destination, fontWeight = FontWeight.Bold)
                     Text("$routeTitle · $distance", color = TextMuted)
                     Text(
-                        "시간 · 안전점수: 데이터 미제공",
+                        route?.let { "약 ${kotlin.math.ceil(com.example.safepath_test1.location.NavigationRepository.travelSeconds(it) / 60).toInt()}분 · 시설지표 ${String.format(java.util.Locale.KOREA, "%.1f", it.safetyFacilityScore)}" } ?: "경로 정보 없음",
                         color = TextMuted,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -658,9 +669,12 @@ fun DepartureScreen(
                     )
                 }
             }
+            if (useBiometric) {
+                Text("시작과 종료 시 생체인증을 사용합니다.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+            } else {
             Text("종료 비밀번호", fontWeight = FontWeight.Bold)
             Text(
-                "운영 세션 종료에 사용할 숫자 4자리입니다. 현재 LAN 간이 테스트에는 비밀번호 인증이 연결되지 않았어요.",
+                "종료에 사용할 숫자 4자리입니다. 비밀번호는 화면에 저장하지 않습니다.",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -700,19 +714,61 @@ fun DepartureScreen(
                     }
                 },
             )
+            }
             Text(
-                "간이 테스트는 현재 위치를 개인 Wi-Fi의 테스트 서버로 전송합니다. 보호자 알림이나 긴급 신고는 전송되지 않습니다.",
+                "현재 로컬 보호자 웹에 경로와 위치를 공유합니다. 앱이 열린 동안 위치가 갱신됩니다.",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
         Button(
             shape = MaterialTheme.shapes.small,
-            onClick = { if (testJourneyActive) onTestJourneyEnd() else onTestJourneyStart(guardians.filter { it.id in selected }.map { it.name }) },
-            enabled = !testJourneyPending && (testJourneyActive || (selected.isNotEmpty() && pin.length == 4)),
+            onClick = {
+                val request = com.example.safepath_test1.session.SessionStartRequest(
+                    routeId = route?.geoJsonLineString?.let { geometry ->
+                        java.security.MessageDigest.getInstance("SHA-256").digest(geometry.toByteArray()).joinToString("") { "%02x".format(it) }
+                    }.orEmpty(),
+                    guardianIds = selected.toList(), endPassword = pin,
+                    useBiometric = useBiometric,
+                    selectedRouteGeoJson = route?.geoJsonLineString,
+                    detectionSettings = com.example.safepath_test1.session.DetectionSettingsStore(context).read(),
+                )
+                val message = request.validationError()
+                if (message != null) android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                else {
+                    val client = com.example.safepath_test1.location.TestJourneyClient
+                    client.biometricKeyAlias?.let { runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(it) } }
+                    client.biometricKeyAlias = null
+                    val names = guardians.filter { it.id in selected }.map { it.name }
+                    val activity = context as? android.app.Activity
+                    if (useBiometric && activity != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        val alias = runCatching { com.example.safepath_test1.session.BiometricSessionSigner.createKey(context).keyAlias }.getOrNull()
+                        if (alias == null) {
+                            android.widget.Toast.makeText(context, "생체인증을 시작할 수 없습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            authenticating = true
+                            val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+                            authenticationCancellation = com.example.safepath_test1.session.BiometricSessionSigner.signChallenge(activity, alias, challenge,
+                                onSigned = {
+                                    if (authenticationScopeActive.get()) {
+                                        authenticating = false; client.biometricKeyAlias = alias; onTestJourneyStart(names, pin)
+                                    } else runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(alias) }
+                                },
+                                onFallback = {
+                                    runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(alias) }
+                                    if (authenticationScopeActive.get()) {
+                                        authenticating = false
+                                        android.widget.Toast.makeText(context, "생체인증 후 시작할 수 있습니다.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                })
+                        }
+                    } else onTestJourneyStart(names, pin)
+                }
+            },
+            enabled = !testJourneyActive && !testJourneyPending && !authenticating && route != null && selected.isNotEmpty() && (useBiometric || pin.length == 4),
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) {
-            Text(if (testJourneyActive) "간이 테스트 종료" else "안전귀가 시작 (간이 테스트)")
+            Text(if (testJourneyPending) "연결 중..." else "안전귀가 시작")
         }
     }
 }

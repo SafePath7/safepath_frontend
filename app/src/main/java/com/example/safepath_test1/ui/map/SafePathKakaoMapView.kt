@@ -1,6 +1,7 @@
 package com.example.safepath_test1.ui.map
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -46,6 +47,9 @@ private val SeoulFallback = GeoPoint(37.5665, 126.9780)
 private const val MapTag = "SafePathKakaoMapView"
 private const val CctvLayerId = "safepath-cctv"
 private const val LightLayerId = "safepath-streetlight"
+private const val BellLayerId = "safepath-emergency-bell"
+private const val FireLayerId = "safepath-fire-stations"
+private const val PoliceLayerId = "safepath-police"
 private const val LocationLayerId = "safepath-current-location"
 private const val DestinationLayerId = "safepath-destination"
 private const val FacilityDisplayRadiusMeters = 5_000.0
@@ -203,9 +207,9 @@ fun SafePathKakaoMapView(
         lightLayer.removeAll()
 
         val cctvStyle =
-            LabelStyles.from(LabelStyle.from(createFacilityBitmap(camera = true)).setZoomLevel(14))
+            facilityMarkerStyle(context, "marker_cctv.png")
         val lightStyle =
-            LabelStyles.from(LabelStyle.from(createFacilityBitmap(camera = false)).setZoomLevel(14))
+            facilityMarkerStyle(context, "marker_streetlight.png")
         val (cctvOptions, lightOptions) =
             withContext(Dispatchers.Default) {
                 val center =
@@ -228,7 +232,7 @@ fun SafePathKakaoMapView(
                         }
                 val lights =
                     SafetyRepository.facilitiesNearPoint(
-                            SafetyRepository.getStreetlightFacilities(context),
+                            try { SafetyRepository.getStreetlightFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "가로등 자료 조회 실패", e); emptyList() },
                             center.latitude,
                             center.longitude,
                             FacilityDisplayRadiusMeters,
@@ -242,6 +246,67 @@ fun SafePathKakaoMapView(
             }
         if (cctvOptions.isNotEmpty()) cctvLayer.addLodLabels(cctvOptions)
         if (lightOptions.isNotEmpty()) lightLayer.addLodLabels(lightOptions)
+    }
+
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+        val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
+        val layer = manager.getLodLayer(FireLayerId)
+            ?: manager.addLodLayer(LabelLayerOptions.from(FireLayerId).setLodRadius(45f).setZOrder(6_200))
+            ?: return@LaunchedEffect
+        layer.setVisible(showSafetyFacilities)
+        layer.removeAll()
+        if (!showSafetyFacilities) return@LaunchedEffect
+        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
+            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
+        val stations = try { SafetyRepository.getFireStations(context) } catch (e: java.io.IOException) {
+            Log.w(MapTag, "소방시설 자료 조회 실패: ${e.message}"); return@LaunchedEffect
+        }
+        val style = facilityMarkerStyle(context, "marker_fire_station.png")
+        val labels = withContext(Dispatchers.Default) {
+            SafetyRepository.facilitiesNearPoint(stations, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
+                .map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) }
+        }
+        if (labels.isNotEmpty()) layer.addLodLabels(labels)
+    }
+
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+        val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
+        val layer = manager.getLodLayer(PoliceLayerId)
+            ?: manager.addLodLayer(LabelLayerOptions.from(PoliceLayerId).setLodRadius(45f).setZOrder(6_100))
+            ?: return@LaunchedEffect
+        layer.setVisible(showSafetyFacilities)
+        layer.removeAll()
+        if (!showSafetyFacilities) return@LaunchedEffect
+        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
+            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
+        val police = SafetyRepository.getPoliceFacilities(context)
+        val style = facilityMarkerStyle(context, "marker_police_station.png")
+        val labels = withContext(Dispatchers.Default) {
+            SafetyRepository.facilitiesNearPoint(police, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
+                .map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) }
+        }
+        if (labels.isNotEmpty()) layer.addLodLabels(labels)
+    }
+
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+        val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
+        val layer = manager.getLodLayer(BellLayerId)
+            ?: manager.addLodLayer(LabelLayerOptions.from(BellLayerId).setLodRadius(45f).setZOrder(6_000))
+            ?: return@LaunchedEffect
+        layer.setVisible(showSafetyFacilities)
+        layer.removeAll()
+        if (!showSafetyFacilities) return@LaunchedEffect
+        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
+            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
+        val bells = try { SafetyRepository.getEmergencyBells(context) } catch (e: java.io.IOException) {
+            Log.w(MapTag, "비상벨 자료 조회 실패", e); return@LaunchedEffect
+        }
+        val style = facilityMarkerStyle(context, "marker_safety_bell.png")
+        val labels = withContext(Dispatchers.Default) {
+            SafetyRepository.facilitiesNearPoint(bells, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
+                .map { LabelOptions.from(LatLng.from(it.latitude, it.longitude)).setStyles(style) }
+        }
+        if (labels.isNotEmpty()) layer.addLodLabels(labels)
     }
 
     LaunchedEffect(
@@ -328,6 +393,15 @@ private fun parseRoutePoints(geoJson: String?): List<LatLng> {
         Log.e(MapTag, "Failed to parse route GeoJSON", exception)
         emptyList()
     }
+}
+
+private fun facilityMarkerStyle(context: android.content.Context, assetName: String): LabelStyles {
+    val bitmap = context.assets.open(assetName).use { stream ->
+        requireNotNull(BitmapFactory.decodeStream(stream)) { "Cannot decode facility marker" }
+    }
+    val scaled = Bitmap.createScaledBitmap(bitmap, 48, 48, true)
+    if (scaled !== bitmap) bitmap.recycle()
+    return LabelStyles.from(LabelStyle.from(scaled).setAnchorPoint(0.5f, 0.95f).setZoomLevel(14))
 }
 
 private fun createDotBitmap(size: Int, fillColor: Int, strokeWidth: Int): Bitmap {

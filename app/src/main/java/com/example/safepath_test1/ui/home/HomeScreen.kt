@@ -2,6 +2,9 @@ package com.example.safepath_test1.ui.home
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
@@ -54,6 +58,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,12 +70,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -85,6 +93,7 @@ import com.example.safepath_test1.location.RouteResult
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.model.PlaceSelection
 import com.example.safepath_test1.ui.components.FloatingPanelShape
+import com.example.safepath_test1.location.NavigationRepository
 import com.example.safepath_test1.ui.guardian.DepartureScreen
 import com.example.safepath_test1.ui.map.SafePathKakaoMapView
 import com.example.safepath_test1.ui.theme.DestRed
@@ -121,15 +130,33 @@ fun HomeScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val homeViewModel: HomeViewModel = viewModel()
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
-    val routeTypes = remember { listOf(RouteType.Safe, RouteType.Recommended, RouteType.Shortest) }
-    val routePagerState = rememberPagerState(initialPage = 1, pageCount = { routeTypes.size })
+    val routeTypes = remember { listOf(RouteType.Recommended, RouteType.Safe, RouteType.Shortest) }
+    val routePagerState = rememberPagerState(initialPage = 0, pageCount = { routeTypes.size })
     val routeType = routeTypes[routePagerState.settledPage].name
     val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current.density
+    val maxPanelHeight = (LocalConfiguration.current.screenHeightDp - 220).coerceIn(154, 320).toFloat()
+    var routePanelHeight by rememberSaveable { mutableStateOf(320f) }
+    val panelDrag = rememberDraggableState { delta ->
+        routePanelHeight = (routePanelHeight.coerceIn(154f, maxPanelHeight) - delta / density).coerceIn(154f, maxPanelHeight)
+    }
     var recenterToken by remember { mutableIntStateOf(0) }
     var showSafetyFacilities by rememberSaveable { mutableStateOf(true) }
     var activeTab by rememberSaveable { mutableStateOf("destination") }
     var isDestinationSearchOpen by rememberSaveable { mutableStateOf(false) }
     var stage by rememberSaveable { mutableStateOf("search") }
+    var showJourneyEnd by remember { mutableStateOf(false) }
+    var endPin by remember { mutableStateOf("") }
+    var endPinError by remember { mutableStateOf(false) }
+    var endAuthenticating by remember { mutableStateOf(false) }
+    var endAuthenticationCancellation by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
+    val endAuthenticationScopeActive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    DisposableEffect(Unit) {
+        onDispose {
+            endAuthenticationScopeActive.set(false)
+            endAuthenticationCancellation?.cancel()
+        }
+    }
     var selectedTestRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var destinationConfirmation by remember { mutableIntStateOf(0) }
     var inputError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -147,7 +174,7 @@ fun HomeScreen(
     val multiRouteResult = uiState.routes
     val isRouteLoading = uiState.isRouteLoading
     val routeError = uiState.routeError
-    val routeNotice = uiState.routeNotice
+    val routeNotice = if (stage == "routes") multiRouteResult?.duplicateRouteLabel() else null
     val placeSearchResults = uiState.places
     val isPlaceSearchLoading = uiState.isPlaceSearchLoading
     val placeSearchError = uiState.placeSearchError
@@ -234,10 +261,14 @@ fun HomeScreen(
             activeRoute?.let {
                 String.format(java.util.Locale.KOREA, "%.1fkm", it.distanceMeters / 1000)
             } ?: "—",
+            route = activeRoute,
             onBack = { stage = "routes" },
             testJourneyActive = testJourneyActive,
             testJourneyPending = testJourneyPending,
-            onTestJourneyStart = { names -> onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType) },
+            onTestJourneyStart = { names, pin ->
+                com.example.safepath_test1.location.TestJourneyClient.setEndPin(pin)
+                onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
+            },
             onTestJourneyEnd = onTestJourneyEnd,
             modifier = modifier.padding(bottom = 88.dp),
         )
@@ -387,7 +418,7 @@ fun HomeScreen(
                         .padding(top = 138.dp, start = 14.dp, end = 14.dp),
             )
         } else if (isRouteLoading || routeError != null || routeNotice != null) {
-            val statusMessage = routeError ?: routeNotice ?: "안전 경로를 검색하고 있습니다."
+            val statusMessage = routeError ?: if (isRouteLoading) "경로 검색 중" else routeNotice.orEmpty()
             Surface(
                 modifier =
                     Modifier.align(Alignment.TopCenter)
@@ -439,15 +470,14 @@ fun HomeScreen(
                         .padding(
                             start = 16.dp,
                             end = 16.dp,
-                            bottom = if (stage == "routes") 108.dp else 80.dp,
+                            bottom = if (stage == "routes") 92.dp else 80.dp,
                         ),
                 shape = FloatingPanelShape,
                 color = Color.White,
                 shadowElevation = 6.dp,
             ) {
                 Column(
-                    (if (stage == "routes") Modifier.heightIn(max = 430.dp)
-                        else Modifier.height(144.dp))
+                    (if (stage == "routes") Modifier else Modifier.height(144.dp))
                         .padding(
                             horizontal = 16.dp,
                             vertical = if (stage == "routes") 16.dp else 12.dp,
@@ -455,33 +485,36 @@ fun HomeScreen(
                     verticalArrangement =
                         Arrangement.spacedBy(if (stage == "routes") 10.dp else 4.dp),
                 ) {
-                    if (stage == "routes")
-                        Box(
-                            Modifier.align(Alignment.CenterHorizontally)
-                                .width(36.dp)
-                                .height(4.dp)
-                                .background(FieldBg, CircleShape)
-                        )
                     if (stage == "routes") {
+                        // Only this body folds. The action below remains outside the clipped area.
                         Column(
-                            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            Modifier.height((routePanelHeight.coerceIn(154f, maxPanelHeight) - 94f).dp)
+                                .clipToBounds()
+                                .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                                .height((maxPanelHeight - 94f).dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                        Column(
+                            Modifier.fillMaxWidth().draggable(state = panelDrag, orientation = Orientation.Vertical),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Box(
+                                Modifier.align(Alignment.CenterHorizontally).width(36.dp).height(4.dp)
+                                    .background(FieldBg, CircleShape)
+                            )
                             Row(
-                                Modifier.fillMaxWidth(),
+                                Modifier.fillMaxWidth().heightIn(min = 36.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(
-                                    "경로 추천",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    "좌우로 넘겨 선택 · ${routePagerState.settledPage + 1}/3",
-                                    color = TextMuted,
-                                    fontSize = 11.sp,
-                                )
+                                Text("경로 추천", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                if (routePanelHeight > 154f)
+                                    Text("좌우로 넘겨 선택 · ${routePagerState.settledPage + 1}/3", color = TextMuted, fontSize = 11.sp)
                             }
+                        }
+                        Column(
+                            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             HorizontalPager(
                                 state = routePagerState,
                                 pageSpacing = 8.dp,
@@ -520,8 +553,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            if (routeNotice != null)
-                                Text(routeNotice, color = TextMuted, fontSize = 12.sp)
+                        }
                         }
                         Button(
                             shape = MaterialTheme.shapes.small,
@@ -648,10 +680,39 @@ fun HomeScreen(
             Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).padding(bottom = 88.dp), shape = RoundedCornerShape(16.dp), color = Color.White) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("안전귀가 이동 중", fontWeight = FontWeight.Bold)
-                    Button(onClick = onTestJourneyEnd, enabled = !testJourneyPending) { Text("테스트 종료") }
+                    Button(onClick = {
+                        endPin = ""; endPinError = false
+                        val alias = com.example.safepath_test1.location.TestJourneyClient.biometricKeyAlias
+                        val activity = context as? android.app.Activity
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && alias != null && activity != null) {
+                            val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+                            endAuthenticating = true
+                            endAuthenticationCancellation = com.example.safepath_test1.session.BiometricSessionSigner.signChallenge(activity, alias, challenge,
+                                onSigned = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; onTestJourneyEnd() } },
+                                onFallback = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; android.widget.Toast.makeText(context, "생체인증 후 종료할 수 있습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_LONG).show() } })
+                        } else showJourneyEnd = true
+                    }, enabled = !testJourneyPending && !endAuthenticating) { Text("안전귀가 종료") }
                 }
             }
         }
+        if (showJourneyEnd) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showJourneyEnd = false },
+            title = { Text("안전귀가 종료") },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = endPin,
+                    onValueChange = { endPin = it.filter(Char::isDigit).take(4); endPinError = false },
+                    label = { Text("종료 비밀번호 4자리") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                    isError = endPinError,
+                )
+            },
+            confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending && endPin.length == 4, onClick = {
+                if (com.example.safepath_test1.location.TestJourneyClient.verifyEndPin(endPin)) { showJourneyEnd = false; endPin = ""; onTestJourneyEnd() } else endPinError = true
+            }) { Text("종료") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { showJourneyEnd = false }) { Text("취소") } },
+        )
         MapSideControls(
             modifier =
                 Modifier.align(Alignment.TopEnd)
@@ -1112,8 +1173,8 @@ private fun RouteOptionCard(
                     modifier = Modifier.weight(1f).padding(start = 6.dp),
                     fontSize = 13.sp,
                 )
-                if (type == RouteType.Safe)
-                    Text("가장 안전", color = SafeBlue, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                if (type == RouteType.Safe && (route?.safetyMetrics?.coveredRatio ?: 0.0) >= 0.05)
+                    Text("시설 우선", color = SafeBlue, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                 Text(
                     route?.let {
                         String.format(java.util.Locale.KOREA, "%.1fkm", it.distanceMeters / 1000)
@@ -1122,12 +1183,12 @@ private fun RouteOptionCard(
                     fontSize = 12.sp,
                 )
             }
-            // 저장소의 점수는 시설 밀도이며 0~100으로 보정된 안전 점수가 아니다.
+            // 시설 밀도는 범죄 확률이나 보정된 절대 안전 점수가 아니다.
             Text(
                 route?.let {
                     String.format(
                         java.util.Locale.KOREA,
-                        "시간 — · 안전점수 — · 시설지표 %.1f",
+                        "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it) / 60).toInt()}분${if (it.durationSeconds == null) " (추정)" else ""} · 시설 기반 지표 %.0f/100",
                         it.safetyFacilityScore,
                     )
                 } ?: "경로 조회 대기 중",
@@ -1136,13 +1197,20 @@ private fun RouteOptionCard(
                 lineHeight = 14.sp,
             )
             LinearProgressIndicator(
-                progress = { 0f },
+                progress = { ((route?.safetyFacilityScore ?: 0.0) / 100.0).coerceIn(0.0,1.0).toFloat() },
                 color = lineColor,
                 trackColor = FieldBg,
                 modifier = Modifier.fillMaxWidth(),
             )
+            route?.safetyMetrics?.let { metrics ->
+                Text("시설 인접 구간 ${(metrics.coveredRatio * 100).toInt()}% · 최대 시설 공백 ${metrics.longestUncoveredMeters.toInt()}m", color = TextMuted, fontSize = 10.sp)
+            }
+            Text("공공시설 자료 기준 · 실제 안전 보장 아님", color = TextMuted, fontSize = 10.sp)
+            route?.routeWarnings?.takeIf { it.isNotEmpty() }?.let {
+                Text(it.joinToString(" · "), color = TextMuted, fontSize = 10.sp)
+            }
             Text(
-                "CCTV —   비상벨 —   지킴이집 —   경찰서 —",
+                route?.let { "CCTV ${it.cctvCount}곳 · 가로등 ${it.streetlightCount}곳" } ?: "시설 분석 대기 중",
                 color = TextMuted,
                 fontSize = 10.sp,
                 lineHeight = 13.sp,

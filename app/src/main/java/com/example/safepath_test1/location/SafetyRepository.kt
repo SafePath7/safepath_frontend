@@ -29,10 +29,36 @@ data class RadiusAnalysisResult(
     val totalScore: Int,
 )
 
+data class RouteFacilityAnalysis(val score: Double, val cctvCount: Int, val streetlightCount: Int)
+
 object SafetyRepository {
     private const val tag = "SafetyRepository"
     private var cctvList: List<SafetyFacility>? = null
+    private var policeList: List<SafetyFacility>? = null
+    private val policeLock = Mutex()
+
+    suspend fun getPoliceFacilities(context: Context): List<SafetyFacility> = policeLock.withLock {
+        policeList ?: withContext(Dispatchers.IO) {
+            context.assets.open("police.csv").bufferedReader(Charsets.UTF_8).useLines { lines ->
+                lines.drop(1).mapNotNull { line ->
+                    val cols = parseCsvLine(line)
+                    val lat = cols.getOrNull(0)?.toDoubleOrNull()
+                    val lng = cols.getOrNull(1)?.toDoubleOrNull()
+                    if (lat != null && lng != null && lat in 30.0..40.0 && lng in 120.0..135.0)
+                        SafetyFacility(lat, lng, cols.getOrElse(2) { "" }) else null
+                }.toList()
+            }
+        }.also { policeList = it }
+    }
     private var streetlightList: List<SafetyFacility>? = null
+    private var emergencyBellList: List<SafetyFacility>? = null
+    private var fireStationList: List<SafetyFacility>? = null
+    private val fireStationLock = Mutex()
+
+    suspend fun getFireStations(context: Context): List<SafetyFacility> = fireStationLock.withLock {
+        fireStationList ?: PublicFacilityApi.loadFireStations(context).also { fireStationList = it }
+    }
+    private val emergencyBellLock = Mutex()
     // CSV는 한 번만 읽고 동시 요청에서도 캐시가 중복 생성되지 않도록 보호한다.
     private val cctvCacheLock = Mutex()
     private val streetlightCacheLock = Mutex()
@@ -42,8 +68,11 @@ object SafetyRepository {
 
     suspend fun getStreetlightFacilities(context: Context): List<SafetyFacility> =
         streetlightCacheLock.withLock {
-            streetlightList ?: loadStreetlights(context).also { streetlightList = it }
+            streetlightList ?: PublicFacilityApi.loadStreetlights(context).also { streetlightList = it }
         }
+
+    suspend fun getEmergencyBells(context: Context): List<SafetyFacility> =
+        emergencyBellLock.withLock { emergencyBellList ?: PublicFacilityApi.loadBells(context).also { emergencyBellList = it } }
 
     suspend fun analyzeRadius(
         context: Context,
@@ -92,17 +121,19 @@ object SafetyRepository {
             )
         }
 
-    suspend fun scoreRouteFacilities(
+    suspend fun analyzeRouteFacilities(
         context: Context,
         routeGeoJson: String,
         routeDistanceMeters: Double,
-    ): Double =
+        scopedCctvs: List<SafetyFacility>? = null,
+        scopedLights: List<SafetyFacility>? = null,
+    ): RouteFacilityAnalysis =
         withContext(Dispatchers.IO) {
             val routePoints =
                 try {
                     val coordinates =
                         org.json.JSONObject(routeGeoJson).optJSONArray("coordinates")
-                            ?: return@withContext 0.0
+                            ?: return@withContext RouteFacilityAnalysis(0.0, 0, 0)
                     buildList<SafetyFacility> {
                         for (index in 0 until coordinates.length()) {
                             val coordinate = coordinates.optJSONArray(index) ?: continue
@@ -114,21 +145,19 @@ object SafetyRepository {
                     }
                 } catch (exception: Exception) {
                     Log.e(tag, "Failed to parse route geometry for facility scoring", exception)
-                    return@withContext 0.0
+                    return@withContext RouteFacilityAnalysis(0.0, 0, 0)
                 }
-            if (routePoints.size < 2) return@withContext 0.0
-            val cctvs = getCctvFacilities(context)
-            val lights = getStreetlightFacilities(context)
-            if (cctvs.isEmpty() && lights.isEmpty()) return@withContext 0.0
-            // 경로 주변의 경계 상자로 시설을 먼저 추려 약 7만 4천 개의 가로등을
-            // 모든 경로 구간과 비교하는 비용을 줄인다.
-            val cctvCandidates = facilitiesInsideRouteBounds(cctvs, routePoints, 50.0)
-            val lightCandidates = facilitiesInsideRouteBounds(lights, routePoints, 40.0)
-            val weightedFacilityCount =
-                cctvCandidates.count { isNearRoute(it, routePoints, 50.0) } * 4.0 +
-                    lightCandidates.count { isNearRoute(it, routePoints, 40.0) }
-            weightedFacilityCount * 1_000.0 / routeDistanceMeters.coerceAtLeast(100.0)
+            if (routePoints.size < 2) return@withContext RouteFacilityAnalysis(0.0, 0, 0)
+            val cctvs = scopedCctvs ?: getCctvFacilities(context)
+            val lights = scopedLights ?: getStreetlightFacilities(context)
+            if (cctvs.isEmpty() && lights.isEmpty()) return@withContext RouteFacilityAnalysis(0.0, 0, 0)
+            val points = routePoints.map { com.example.safepath_test1.model.GeoPoint(it.latitude,it.longitude) }
+            val metrics = RouteSafetyEvaluator.evaluate(points,cctvs,lights)
+            RouteFacilityAnalysis(metrics.score,metrics.cctvCount,metrics.streetlightCount)
         }
+
+    suspend fun scoreRouteFacilities(context: Context, routeGeoJson: String, routeDistanceMeters: Double): Double =
+        analyzeRouteFacilities(context, routeGeoJson, routeDistanceMeters).score
 
     internal fun facilitiesInsideRouteBounds(
         facilities: List<SafetyFacility>,
@@ -167,6 +196,8 @@ object SafetyRepository {
                 it.latitude in (latitude - latitudePadding)..(latitude + latitudePadding) &&
                     it.longitude in (longitude - longitudePadding)..(longitude + longitudePadding)
             }
+            .filter { distanceInMeters(latitude, longitude, it.latitude, it.longitude) <= radiusMeters }
+            .sortedBy { distanceInMeters(latitude, longitude, it.latitude, it.longitude) }
             .take(limit)
             .toList()
     }
@@ -242,11 +273,11 @@ object SafetyRepository {
         return result
     }
 
-    // CCTV 공공데이터는 EUC-KR로 배포되므로 주소가 깨지지 않게 해당 인코딩으로 읽는다.
+    // 전처리한 UTF-8 좌표 전용 자료를 읽는다.
     private fun loadCctv(context: Context): List<SafetyFacility> {
         val list = mutableListOf<SafetyFacility>()
         try {
-            context.assets.open("cctv.csv").bufferedReader(charset("EUC-KR")).useLines { lines ->
+            context.assets.open("cctv.csv").bufferedReader(Charsets.UTF_8).useLines { lines ->
                 lines.drop(1).forEach { line ->
                     val cols = parseCsvLine(line)
                     if (cols.size >= 2) {
@@ -264,7 +295,7 @@ object SafetyRepository {
                 }
             }
         } catch (exception: Exception) {
-            Log.e(tag, "Failed to load or parse cctv.csv", exception)
+            throw java.io.IOException("CCTV 자료를 읽지 못했습니다.", exception)
         }
         return list
     }
@@ -287,7 +318,7 @@ object SafetyRepository {
                 }
             }
         } catch (exception: Exception) {
-            Log.e(tag, "Failed to load or parse streetlight.csv", exception)
+            throw java.io.IOException("가로등 자료를 읽지 못했습니다.", exception)
         }
         return list
     }

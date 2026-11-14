@@ -27,6 +27,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.safepath_test1.auth.normalizeKoreanPhoneNumber
 import com.example.safepath_test1.ui.theme.*
 import com.google.firebase.auth.FirebaseAuth
+import com.example.safepath_test1.api.AccountRepository
+import com.example.safepath_test1.api.accountErrorMessage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable
 fun SignupScreen(onComplete: () -> Unit, onBack: () -> Unit) {
@@ -37,6 +41,10 @@ fun SignupScreen(onComplete: () -> Unit, onBack: () -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember(context) { context.getSharedPreferences("safe_path_profile", Context.MODE_PRIVATE) }
+    val repository = remember(context) { AccountRepository(context) }
+    val scope = rememberCoroutineScope()
+    var registering by remember { mutableStateOf(false) }
+    var registrationError by remember { mutableStateOf<String?>(null) }
     val back = { model.abandon(); onBack() }
     BackHandler(onBack = back)
 
@@ -73,11 +81,12 @@ fun SignupScreen(onComplete: () -> Unit, onBack: () -> Unit) {
             Text("보호자가 알아볼 수 있도록 이름과 전화번호를 알려 주세요.", color = TextMuted)
             OutlinedTextField(
                 state.name, model::setName, label = { Text("이름") }, singleLine = true,
+                enabled = !registering,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 state.phone, model::setPhone, label = { Text("전화번호") }, singleLine = true,
-                enabled = !state.busy,
+                enabled = !state.busy && !registering,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 supportingText = { Text("010-1234-5678 또는 +82 10-1234-5678") },
                 modifier = Modifier.fillMaxWidth(),
@@ -128,6 +137,7 @@ fun SignupScreen(onComplete: () -> Unit, onBack: () -> Unit) {
                 Text("자동 인증 대기가 끝났습니다. SMS의 6자리 번호를 직접 입력해 주세요.", color = TextMuted)
             } else if (state.canEnterCode) Text("인증번호를 발송했습니다. SMS를 확인해 주세요.", color = TextMuted)
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            registrationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.phase == SignupPhase.FAILED) {
                 TextButton(onClick = model::onEnter) { Text("계정 연결 상태 다시 확인") }
             }
@@ -147,16 +157,27 @@ fun SignupScreen(onComplete: () -> Unit, onBack: () -> Unit) {
         }
         Button(
             shape = MaterialTheme.shapes.small,
-            enabled = state.canComplete,
+            enabled = state.canComplete && !registering,
             onClick = {
-                if (model.completeSignup { userUid, name, phone ->
-                    // Existing device onboarding contract, not a server membership record.
-                    prefs.edit().putString("user_name", name).putString("user_phone", phone)
-                        .putString("onboarded_uid", userUid).apply()
-                }) onComplete()
+                val details = model.verifiedSignup()
+                if (details != null) {
+                    registering = true
+                    registrationError = null
+                    scope.launch {
+                        try {
+                            repository.register(details.second)
+                            if (model.verifiedSignup() == details && model.completeSignup { userUid, name, phone ->
+                                prefs.edit().putString("user_name", name).putString("user_phone", phone)
+                                    .putString("onboarded_uid", userUid).apply()
+                            }) onComplete()
+                        } catch (error: CancellationException) { throw error }
+                        catch (error: Exception) { registrationError = accountErrorMessage(error) }
+                        finally { registering = false }
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        ) { Text("시작하기") }
+        ) { Text(if (registering) "등록 중..." else "시작하기") }
     }
 }
 

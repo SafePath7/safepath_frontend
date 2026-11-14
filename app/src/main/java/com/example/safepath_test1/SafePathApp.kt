@@ -51,9 +51,22 @@ import com.example.safepath_test1.ui.profile.ProfileScreen
 import com.example.safepath_test1.ui.theme.AppBackground
 import com.example.safepath_test1.ui.theme.SafePathTheme
 import com.google.firebase.auth.FirebaseAuth
+import com.example.safepath_test1.api.AccountRepository
+import com.example.safepath_test1.api.accountErrorMessage
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun SafePathApp() {
+    val permissionContext = LocalContext.current
+    var permissionRevision by remember { mutableIntStateOf(0) }
+    val startupPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissionRevision++ }
+    LaunchedEffect(Unit) {
+        val requested = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (android.os.Build.VERSION.SDK_INT >= 33) requested.add(Manifest.permission.POST_NOTIFICATIONS)
+        if (android.os.Build.VERSION.SDK_INT >= 37 && BuildConfig.DEBUG) requested.add("android.permission.ACCESS_LOCAL_NETWORK")
+        val missing = requested.filter { ContextCompat.checkSelfPermission(permissionContext, it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) startupPermissions.launch(missing.toTypedArray())
+    }
     val auth = remember { FirebaseAuth.getInstance() }
     var firebaseUser by remember { mutableStateOf(auth.currentUser) }
 
@@ -67,23 +80,59 @@ fun SafePathApp() {
     var profileVersion by remember { mutableIntStateOf(0) }
     val profile =
         context.getSharedPreferences("safe_path_profile", android.content.Context.MODE_PRIVATE)
-    val needsSignup =
-        remember(firebaseUser?.uid, profileVersion) {
-            firebaseUser != null && profile.getString("onboarded_uid", null) != firebaseUser?.uid
+    val repository = remember(context) { AccountRepository(context) }
+    var retry by remember { mutableIntStateOf(0) }
+    var membership by remember(firebaseUser?.uid) { mutableStateOf("checking") }
+    var membershipError by remember(firebaseUser?.uid) { mutableStateOf<String?>(null) }
+    LaunchedEffect(firebaseUser?.uid, profileVersion, retry) {
+        val uid = firebaseUser?.uid ?: return@LaunchedEffect
+        membership = "checking"
+        try {
+            membership = when (repository.login().status) {
+                "SIGNUP_REQUIRED" -> "signup"
+                "REGISTERED" -> {
+                    val serverProfile = repository.profile()
+                    if (auth.currentUser?.uid == uid) {
+                        profile.edit().putString("onboarded_uid", uid)
+                            .putString("user_name", serverProfile.name)
+                            .putString("user_phone", serverProfile.phoneNumber).apply()
+                    }
+                    "registered"
+                }
+                else -> error("서버의 회원 상태를 확인할 수 없습니다.")
+            }
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) {
+            membershipError = accountErrorMessage(error)
+            membership = "error"
         }
+    }
     SafePathTheme {
-        if (needsSignup) {
-            SignupScreen(onComplete = { profileVersion++ }, onBack = { auth.signOut() })
-        } else if (firebaseUser != null) {
-            SafePathMain(onLogout = { auth.signOut() })
-        } else {
+        if (firebaseUser == null) {
             LoginPage(onLoginSuccess = { firebaseUser = auth.currentUser })
+        } else if (membership == "signup") {
+            SignupScreen(onComplete = { profileVersion++ }, onBack = { auth.signOut() })
+        } else if (membership == "registered") {
+            SafePathMain(onLogout = { auth.signOut() }, permissionRevision = permissionRevision)
+        } else {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (membership == "checking") androidx.compose.material3.CircularProgressIndicator()
+                else {
+                    Text(membershipError ?: "서버에 연결할 수 없습니다.")
+                    Button(onClick = { retry++ }) { Text("다시 시도") }
+                    TextButton(onClick = { auth.signOut() }) { Text("로그아웃") }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SafePathMain(onLogout: () -> Unit) {
+private fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
@@ -114,25 +163,9 @@ private fun SafePathMain(onLogout: () -> Unit) {
     var preparedInvite by remember { mutableStateOf<CreatedFriendInvite?>(null) }
     var shareError by remember { mutableStateOf<String?>(null) }
     var hasLocationPermission by remember { mutableStateOf(isLocationPermissionGranted(context)) }
-    val permissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            result ->
-            hasLocationPermission =
-                result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                    result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        }
-
-    LaunchedEffect(Unit) {
-        if (!hasLocationPermission) {
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                )
-            )
-        }
+    LaunchedEffect(permissionRevision) {
+        hasLocationPermission = isLocationPermissionGranted(context)
     }
-
     DisposableEffect(hasLocationPermission) {
         if (!hasLocationPermission) {
             onDispose {}
