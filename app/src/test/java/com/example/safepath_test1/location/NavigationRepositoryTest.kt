@@ -61,15 +61,21 @@ class NavigationRepositoryTest {
         assertEquals(100.0, NavigationRepository.travelSeconds(RouteResult("x", 120.0)), 0.001)
     }
 
-    @Test fun recommendationUses65PercentSafetyInsteadOfEqualWeights() {
+    @Test fun recommendationUsesEqualSafetyAndTimeWeights() {
         val fastest = RouteResult("fast", 100.0, 0.0, durationSeconds = 100.0)
         val middle = RouteResult("middle", 110.0, 50.0, durationSeconds = 110.0)
         val safest = RouteResult("safe", 130.0, 100.0, durationSeconds = 130.0)
-        // Absolute safety / 100 and fastest-time / route-time retain safety 65 : time 35.
+        // Absolute safety / 100 and fastest-time / route-time each contribute 50%.
         val result = NavigationRepository.selectRoutes(listOf(fastest, middle, safest))
         assertEquals(middle, result.recommendedRoute)
         assertEquals(fastest, result.shortestRoute)
         assertEquals(middle, result.safeRoute)
+    }
+
+    @Test fun equalWeightsFavorTimeWhenSafetyGainIsSmall() {
+        val fast = RouteResult("fast", 100.0, 40.0, durationSeconds = 100.0)
+        val slower = RouteResult("slower", 120.0, 50.0, durationSeconds = 120.0)
+        assertEquals(fast, NavigationRepository.selectRoutes(listOf(fast, slower)).recommendedRoute)
     }
 
     @Test fun addingDominatedCandidateDoesNotRenormalizeSafetyScale() {

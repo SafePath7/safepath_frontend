@@ -48,7 +48,7 @@ data class MultiRouteResult(
 }
 
 object NavigationRepository {
-    internal const val recommendedSafetyWeight = 0.65
+    internal const val recommendedSafetyWeight = 0.50
 
     @Volatile private var routingClient: Pair<String, MapboxWalkingClient>? = null
 
@@ -101,7 +101,7 @@ object NavigationRepository {
         fun safety(route: RouteResult) = (route.safetyFacilityScore / 100.0).coerceIn(0.0,1.0)
         fun timeEfficiency(route: RouteResult) = (fastestTime / travelSeconds(route).coerceAtLeast(1.0)).coerceIn(0.0,1.0)
 
-        // 안전은 구간 커버리지 지표 최우선, 동점만 시간으로 결정. 추천은 안전 65%, 시간 효율 35%를 반영한다.
+        // 안전은 시설 점수 우선, 추천은 시설 점수와 시간 효율을 각각 50% 반영한다.
         val permitted = valid.filter { SafetyPolicy.withinDetour(travelSeconds(it), fastestTime) && it.assessment?.status != AssessmentStatus.UNAVAILABLE }
         val safeRoute =
             permitted.sortedWith(compareByDescending<RouteResult> { it.safetyFacilityScore }.thenBy { travelSeconds(it) }).firstOrNull() ?: shortestRoute
