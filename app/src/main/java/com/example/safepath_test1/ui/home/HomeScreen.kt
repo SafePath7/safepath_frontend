@@ -105,8 +105,8 @@ import com.example.safepath_test1.ui.theme.TextMuted
 import kotlinx.coroutines.launch
 
 private enum class RouteType(val title: String, val icon: ImageVector) {
-    Safe("가장 안전한 경로", Icons.Default.Lock),
-    Shortest("최단 경로", Icons.Default.Info),
+    Safe("안전시설 우선 경로", Icons.Default.Lock),
+    Shortest("가장 빠른 경로", Icons.Default.Info),
     Recommended("추천 경로", Icons.Default.Star),
 }
 
@@ -163,6 +163,9 @@ fun HomeScreen(
     var favoriteLabel by rememberSaveable { mutableStateOf<String?>(null) }
     val recentPrefs = remember {
         context.getSharedPreferences("safe_path_destinations", android.content.Context.MODE_PRIVATE)
+    }
+    LaunchedEffect(Unit) {
+        com.example.safepath_test1.location.SafetyRepository.warmAssessmentDatasets(context.applicationContext)
     }
     LaunchedEffect(currentLocation) {
         if (origin.name.isBlank() && currentLocation != null)
@@ -527,7 +530,7 @@ fun HomeScreen(
                                         RouteType.Recommended -> multiRouteResult?.recommendedRoute
                                         RouteType.Shortest -> multiRouteResult?.shortestRoute
                                     }
-                                RouteOptionCard(type, route, selected = true) {}
+                                RouteOptionCard(type, route, selected = true, fastest = multiRouteResult?.shortestRoute) {}
                             }
                             Row(
                                 Modifier.fillMaxWidth(),
@@ -1150,6 +1153,7 @@ private fun RouteOptionCard(
     type: RouteType,
     route: RouteResult?,
     selected: Boolean,
+    fastest: RouteResult? = null,
     onClick: () -> Unit,
 ) {
     val lineColor =
@@ -1186,7 +1190,7 @@ private fun RouteOptionCard(
             // 시설 밀도는 범죄 확률이나 보정된 절대 안전 점수가 아니다.
             Text(
                 route?.let {
-                    String.format(
+                    if(it.assessment?.score == null) "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it)/60).toInt()}분 · 안전도 판단 불가" else String.format(
                         java.util.Locale.KOREA,
                         "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it) / 60).toInt()}분${if (it.durationSeconds == null) " (추정)" else ""} · 시설 기반 지표 %.0f/100",
                         it.safetyFacilityScore,
@@ -1196,12 +1200,26 @@ private fun RouteOptionCard(
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
             )
-            LinearProgressIndicator(
+            if(route?.assessment?.score != null) LinearProgressIndicator(
                 progress = { ((route?.safetyFacilityScore ?: 0.0) / 100.0).coerceIn(0.0,1.0).toFloat() },
                 color = lineColor,
                 trackColor = FieldBg,
                 modifier = Modifier.fillMaxWidth(),
             )
+            if(route != null && fastest != null) {
+                val extraSeconds = NavigationRepository.travelSeconds(route)-NavigationRepository.travelSeconds(fastest)
+                val extraMeters = route.distanceMeters-fastest.distanceMeters
+                Text("총 ${route.distanceMeters.toInt()}m · 가장 빠른 경로 대비 ${if(extraSeconds>=0) "+" else ""}${kotlin.math.ceil(extraSeconds/60).toInt()}분 / ${if(extraMeters>=0) "+" else ""}${extraMeters.toInt()}m", color=TextMuted, fontSize=10.sp)
+            }
+            route?.assessment?.let { assessment ->
+                Text(when(assessment.status) {
+                    com.example.safepath_test1.location.AssessmentStatus.NORMAL -> "평가 가능 · 임시 가중치"
+                    com.example.safepath_test1.location.AssessmentStatus.PARTIAL -> "부분 평가 · 자료 누락 있음"
+                    else -> "안전도 판단 불가 · 가장 빠른 경로 대체 제공"
+                }, color = TextMuted, fontSize = 10.sp)
+                Text(assessment.datasets.filter { it.availability != com.example.safepath_test1.location.DataAvailability.AVAILABLE }
+                    .joinToString(" · ") { "${it.type}: ${it.detail ?: it.availability}" }, color = TextMuted, fontSize = 10.sp)
+            }
             route?.safetyMetrics?.let { metrics ->
                 Text("시설 인접 구간 ${(metrics.coveredRatio * 100).toInt()}% · 최대 시설 공백 ${metrics.longestUncoveredMeters.toInt()}m", color = TextMuted, fontSize = 10.sp)
             }

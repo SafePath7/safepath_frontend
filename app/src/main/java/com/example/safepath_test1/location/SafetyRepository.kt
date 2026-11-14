@@ -3,6 +3,8 @@ package com.example.safepath_test1.location
 import android.content.Context
 import android.util.Log
 import kotlin.math.cos
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,6 +34,70 @@ data class RadiusAnalysisResult(
 data class RouteFacilityAnalysis(val score: Double, val cctvCount: Int, val streetlightCount: Int)
 
 object SafetyRepository {
+    private val assessmentScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val assessmentCache = java.util.concurrent.ConcurrentHashMap<FacilityType, FacilityDataset>()
+    private val assessmentJobs = mutableMapOf<FacilityType, kotlinx.coroutines.Job>()
+    private val assessmentSources = listOf(
+        Triple(FacilityType.CCTV, "앱 내 cctv.csv", "지도 표시 자료"),
+        Triple(FacilityType.LIGHT, "대구공공시설관리공단", "대구"),
+        Triple(FacilityType.POLICE, "앱 내 police.csv", "지도 표시 자료"),
+        Triple(FacilityType.BELL, "행정안전부 안전비상벨 API", "지도 표시 자료"),
+        Triple(FacilityType.FIRE, "생활안전지도 IF_0038", "지도 표시 자료"),
+    )
+
+    fun warmAssessmentDatasets(context: Context) {
+        synchronized(assessmentJobs) {
+            assessmentSources.forEach { (type, source, region) ->
+                if (assessmentCache[type]?.availability == DataAvailability.AVAILABLE || assessmentJobs[type]?.isActive == true) return@forEach
+                assessmentJobs[type] = assessmentScope.launch {
+                    val dataset = try {
+                        val facilities = when (type) {
+                            FacilityType.CCTV -> getCctvFacilities(context.applicationContext)
+                            FacilityType.LIGHT -> getStreetlightFacilities(context.applicationContext)
+                            FacilityType.POLICE -> getPoliceFacilities(context.applicationContext)
+                            FacilityType.BELL -> getEmergencyBells(context.applicationContext)
+                            FacilityType.FIRE -> getFireStations(context.applicationContext)
+                        }
+                        FacilityDataset(type, facilities, source, region, availability=DataAvailability.AVAILABLE)
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                    } catch (e: Exception) {
+                        FacilityDataset(type, emptyList(), source, region, availability=DataAvailability.FAILED, detail="자료 요청 실패")
+                    }
+                    assessmentCache[type] = dataset
+                }
+            }
+        }
+    }
+
+    fun assessmentSnapshot(): List<FacilityDataset> = assessmentSources.map { (type,source,region) ->
+        assessmentCache[type] ?: FacilityDataset(type,emptyList(),source,region,availability=DataAvailability.NOT_RECEIVED,detail="자료 불러오는 중")
+    }
+    suspend fun loadAssessmentDatasets(context: Context): List<FacilityDataset> = kotlinx.coroutines.coroutineScope {
+        val sources = listOf(
+            Triple(FacilityType.CCTV, "앱 내 cctv.csv", "제공 지역 메타데이터 미확인"),
+            Triple(FacilityType.LIGHT, "대구공공시설관리공단 20260812", "대구 자료, 정확한 제공 경계 미확인"),
+            Triple(FacilityType.POLICE, "앱 내 police.csv", "검색 검증된 일부 시설, 완전성 미확인"),
+            Triple(FacilityType.BELL, "행정안전부 안전비상벨 API", "참여 자치단체별 범위 미확인"),
+            Triple(FacilityType.FIRE, "생활안전지도 IF_0038", "제공 경계 미확인"),
+        )
+        sources.map { (type, source, region) -> async {
+            try {
+                val facilities = when(type) {
+                    FacilityType.CCTV -> getCctvFacilities(context)
+                    FacilityType.LIGHT -> getStreetlightFacilities(context)
+                    FacilityType.POLICE -> getPoliceFacilities(context)
+                    FacilityType.BELL -> getEmergencyBells(context)
+                    FacilityType.FIRE -> getFireStations(context)
+                }
+                FacilityDataset(type,facilities,source,region,availability=DataAvailability.AVAILABLE,
+                    detail="지도에 표시 가능한 위치 자료를 불러왔습니다.")
+            } catch(e: kotlinx.coroutines.CancellationException) { throw e
+            } catch(e: Exception) {
+                FacilityDataset(type,emptyList(),source,region,availability=DataAvailability.FAILED,detail="자료 요청 실패")
+            }
+        } }.map { it.await() }
+    }
+
     private const val tag = "SafetyRepository"
     private var cctvList: List<SafetyFacility>? = null
     private var policeList: List<SafetyFacility>? = null

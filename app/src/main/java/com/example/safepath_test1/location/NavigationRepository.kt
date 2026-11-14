@@ -26,6 +26,7 @@ data class RouteResult(
     val snapDistancesMeters: List<Double> = emptyList(),
     val safetyMetrics: RouteSafetyMetrics? = null,
     val routeWarnings: List<String> = emptyList(),
+    val assessment: SafetyAssessment? = null,
 )
 
 data class MultiRouteResult(
@@ -38,7 +39,7 @@ data class MultiRouteResult(
     val diagnostics: RouteSearchDiagnostics? = null,
 ) {
     internal fun duplicateRouteLabel(): String? =
-        listOf("추천" to recommendedRoute, "안전" to safeRoute, "최단" to shortestRoute)
+        listOf("추천" to recommendedRoute, "안전" to safeRoute, "가장 빠른" to shortestRoute)
             .mapNotNull { (name, route) -> route?.geoJsonLineString?.takeIf { it.isNotBlank() }?.let { name to it } }
             .groupBy({ it.second }, { it.first })
             .values.filter { it.size > 1 }
@@ -60,7 +61,16 @@ object NavigationRepository {
             routingClient?.takeIf { it.first == accessToken }?.second
                 ?: MapboxWalkingClient(accessToken).also { routingClient = accessToken to it }
         }
-        return RouteSearchEngine(source).search(GeoPoint(originLat,originLng),GeoPoint(destLat,destLng)) {
+        SafetyRepository.warmAssessmentDatasets(context.applicationContext)
+        return RouteSearchEngine(source, datasetLoader = {
+            repeat(8) {
+                val snapshot = SafetyRepository.assessmentSnapshot()
+                if (snapshot.any { (it.type == FacilityType.CCTV || it.type == FacilityType.LIGHT) && it.availability == DataAvailability.AVAILABLE })
+                    return@RouteSearchEngine snapshot
+                kotlinx.coroutines.delay(100)
+            }
+            SafetyRepository.assessmentSnapshot()
+        }).search(GeoPoint(originLat,originLng),GeoPoint(destLat,destLng)) {
             withContext(Dispatchers.IO) {
                 SafetyRepository.getCctvFacilities(context) to SafetyRepository.getStreetlightFacilities(context)
             }
@@ -70,14 +80,16 @@ object NavigationRepository {
     /** Absolute facility coverage proxy and fastest-time/route-time efficiency; no candidate min-max rescaling. */
     internal fun selectRoutes(candidates: List<RouteResult>): MultiRouteResult {
         if (candidates.isEmpty()) return MultiRouteResult(null, null, null)
-        val shortestRoute = candidates.minByOrNull { travelSeconds(it) } ?: candidates.first()
+        val valid = candidates.filter { it.distanceMeters.isFinite() && it.distanceMeters > 0 && travelSeconds(it).isFinite() && travelSeconds(it) > 0 }
+        if(valid.isEmpty()) return MultiRouteResult(null,null,null,errorMessage="유효한 경로가 없습니다.")
+        val shortestRoute = valid.minByOrNull { travelSeconds(it) } ?: candidates.first()
         if (candidates.size == 1) {
             return MultiRouteResult(
                 safeRoute = shortestRoute,
                 shortestRoute = shortestRoute,
                 recommendedRoute = shortestRoute,
                 candidateRouteCount = 1,
-                noticeMessage = "안전, 최단, 추천 경로가 모두 같습니다.",
+                noticeMessage = "시설 우선, 가장 빠른, 추천 경로가 모두 같습니다.",
             )
         }
 
@@ -90,12 +102,19 @@ object NavigationRepository {
         fun timeEfficiency(route: RouteResult) = (fastestTime / travelSeconds(route).coerceAtLeast(1.0)).coerceIn(0.0,1.0)
 
         // 안전은 구간 커버리지 지표 최우선, 동점만 시간으로 결정. 추천은 안전 65%, 시간 효율 35%를 반영한다.
+        val permitted = valid.filter { SafetyPolicy.withinDetour(travelSeconds(it), fastestTime) && it.assessment?.status != AssessmentStatus.UNAVAILABLE }
         val safeRoute =
-            candidates.sortedWith(compareByDescending<RouteResult> { it.safetyFacilityScore }.thenBy { travelSeconds(it) }).firstOrNull() ?: shortestRoute
-        val recommendedRoute =
-            candidates.maxByOrNull {
-                safety(it) * recommendedSafetyWeight + timeEfficiency(it) * (1.0 - recommendedSafetyWeight)
-            } ?: shortestRoute
+            permitted.sortedWith(compareByDescending<RouteResult> { it.safetyFacilityScore }.thenBy { travelSeconds(it) }).firstOrNull() ?: shortestRoute
+        fun recommendedScore(route: RouteResult) =
+            safety(route) * recommendedSafetyWeight + timeEfficiency(route) * (1.0 - recommendedSafetyWeight)
+        val bestRecommended = permitted.maxByOrNull(::recommendedScore)
+        // Prefer a distinct, comparable alternative only when it stays within five points.
+        val distinctRecommended = permitted.filter {
+            it.geoJsonLineString != safeRoute.geoJsonLineString && it.geoJsonLineString != shortestRoute.geoJsonLineString
+        }.maxByOrNull(::recommendedScore)
+        val recommendedRoute = if (distinctRecommended != null && bestRecommended != null &&
+            recommendedScore(bestRecommended) - recommendedScore(distinctRecommended) <= 0.05)
+            distinctRecommended else bestRecommended ?: shortestRoute
         val selectedGeometryCount =
             listOf(safeRoute, shortestRoute, recommendedRoute)
                 .distinctBy { it.geoJsonLineString }

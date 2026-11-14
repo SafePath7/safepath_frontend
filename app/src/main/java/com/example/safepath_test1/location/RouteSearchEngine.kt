@@ -21,8 +21,9 @@ data class RouteSearchDiagnostics(
 /** Shares exactly the same orchestration in Android and the live JVM validation suite. */
 internal class RouteSearchEngine(
     private val source: WalkingRouteSource,
-    private val refinementBudgetMillis: Long = 6000,
-    private val overallBudgetMillis: Long = 12000,
+    private val refinementBudgetMillis: Long = 1000,
+    private val overallBudgetMillis: Long = 5000,
+    private val datasetLoader: (suspend () -> List<FacilityDataset>)? = null,
 ) {
     suspend fun search(origin: GeoPoint,destination: GeoPoint,
         loadFacilities: suspend () -> Pair<List<SafetyFacility>,List<SafetyFacility>>,
@@ -60,7 +61,7 @@ internal class RouteSearchEngine(
             // Sources are validated at the protocol boundary; fake providers also supply real geometry.
             return result.routes.filter { it.geometryPoints.size>=2 && it.durationSeconds?.let { t -> t.isFinite() && t>0 } == true }
         }
-        val direct=withTimeoutOrNull(4500) { fetch(listOf(origin,destination),true) }
+        val direct=withTimeoutOrNull(4200) { fetch(listOf(origin,destination),true) }
             ?: return@withContext error("경로 서버 응답이 늦습니다. 잠시 후 다시 시도해 주세요.")
         if(direct.isEmpty()) {
             val message=when {
@@ -81,13 +82,29 @@ internal class RouteSearchEngine(
         val baseWarnings=if(anchorQuality.suspicious) listOf("왕복 구간 포함") else emptyList()
         onBaseline(NavigationRepository.selectRoutes(baseline.map { it.copy(routeWarnings=baseWarnings+"시설 분석 미완료") })
             .copy(diagnostics=diagnostics()))
+        var datasets: List<FacilityDataset>? = null
         val facilities=try {
-            withTimeoutOrNull(3000) { loadFacilities() }
+                withTimeoutOrNull(1500) {
+                datasets = datasetLoader?.invoke() ?: run {
+                    val (cameras,lamps)=loadFacilities()
+                    listOf(
+                        FacilityDataset(FacilityType.CCTV,cameras,"앱 내 CCTV 자료","지도 표시 데이터",availability=DataAvailability.AVAILABLE),
+                        FacilityDataset(FacilityType.LIGHT,lamps,"가로등 자료","지도 표시 데이터",availability=DataAvailability.AVAILABLE),
+                    )
+                }
+                datasets.orEmpty().filter { it.availability == DataAvailability.AVAILABLE }
+                    .firstOrNull { it.type == FacilityType.CCTV }?.facilities.orEmpty() to
+                    datasets.orEmpty().filter { it.availability == DataAvailability.AVAILABLE }
+                        .firstOrNull { it.type == FacilityType.LIGHT }?.facilities.orEmpty()
+                }
         } catch(cancelled: CancellationException) { throw cancelled
         } catch(_: Exception) { null }
         if(facilities==null) {
             problems.add("FacilitiesUnavailable")
-            val fallback=baseline.map { it.copy(routeWarnings=baseWarnings+"시설 자료 확인 불가") }
+            datasets = null
+            val fallback=baseline.map { route ->
+                route.copy(routeWarnings=baseWarnings+"안전시설 평가 생략 · 빠른 경로 제공")
+            }
             return@withContext NavigationRepository.selectRoutes(fallback).copy(diagnostics=diagnostics())
         }
         val plan=FacilityRoutePlanner.plan(origin,destination,facilities.first,facilities.second) { searchContext.ensureActive() }
@@ -134,7 +151,8 @@ internal class RouteSearchEngine(
                 it.snapDistancesMeters.firstOrNull()?.takeIf { d -> d>15 }?.let { d -> add("출발 보행로 연결 약 ${kotlin.math.ceil(d).toInt()}m") }
                 it.snapDistancesMeters.lastOrNull()?.takeIf { d -> d>15 }?.let { d -> add("도착 보행로 연결 약 ${kotlin.math.ceil(d).toInt()}m") }
             }
-            it.copy(safetyFacilityScore=metrics.score,cctvCount=metrics.cctvCount,streetlightCount=metrics.streetlightCount,
+            val assessment = datasets?.let { data -> FiveFacilityEvaluator.evaluate(it.geometryPoints,data) { searchContext.ensureActive() } }
+            it.copy(assessment=assessment,safetyFacilityScore=assessment?.score ?: if(assessment == null) metrics.score else 0.0,cctvCount=metrics.cctvCount,streetlightCount=metrics.streetlightCount,
                 safetyMetrics=metrics,routeWarnings=warnings)
         }
         NavigationRepository.selectRoutes(scored).copy(diagnostics=diagnostics())

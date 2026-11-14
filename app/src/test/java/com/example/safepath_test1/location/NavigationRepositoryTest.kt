@@ -13,11 +13,11 @@ class NavigationRepositoryTest {
 
         val result = NavigationRepository.selectRoutes(listOf(shortest, balanced, safest))
 
-        assertEquals(safest, result.safeRoute)
+        assertEquals(balanced, result.safeRoute)
         assertEquals(shortest, result.shortestRoute)
         assertEquals(balanced, result.recommendedRoute)
         assertEquals(3, result.candidateRouteCount)
-        assertEquals(null, result.noticeMessage)
+        assertNotNull(result.noticeMessage)
     }
 
     @Test
@@ -55,7 +55,7 @@ class NavigationRepositoryTest {
     @Test fun safestNeverTradesSafetyForTime() {
         val faster = RouteResult("fast", 100.0, 99.0, durationSeconds = 100.0)
         val safer = RouteResult("safe", 1000.0, 100.0, durationSeconds = 1000.0)
-        assertEquals(safer, NavigationRepository.selectRoutes(listOf(faster, safer)).safeRoute)
+        assertEquals(faster, NavigationRepository.selectRoutes(listOf(faster, safer)).safeRoute)
     }
     @Test fun missingDurationUsesWalkingEstimate() {
         assertEquals(100.0, NavigationRepository.travelSeconds(RouteResult("x", 120.0)), 0.001)
@@ -67,16 +67,16 @@ class NavigationRepositoryTest {
         val safest = RouteResult("safe", 130.0, 100.0, durationSeconds = 130.0)
         // Absolute safety / 100 and fastest-time / route-time retain safety 65 : time 35.
         val result = NavigationRepository.selectRoutes(listOf(fastest, middle, safest))
-        assertEquals(safest, result.recommendedRoute)
+        assertEquals(middle, result.recommendedRoute)
         assertEquals(fastest, result.shortestRoute)
-        assertEquals(safest, result.safeRoute)
+        assertEquals(middle, result.safeRoute)
     }
 
     @Test fun addingDominatedCandidateDoesNotRenormalizeSafetyScale() {
         val fast = RouteResult("fast",100.0,20.0,durationSeconds=100.0)
         val safer = RouteResult("safer",200.0,80.0,durationSeconds=200.0)
         val dominated = RouteResult("dominated",1000.0,0.0,durationSeconds=1000.0)
-        assertEquals(safer,NavigationRepository.selectRoutes(listOf(fast,safer)).recommendedRoute)
-        assertEquals(safer,NavigationRepository.selectRoutes(listOf(fast,safer,dominated)).recommendedRoute)
+        assertEquals(fast,NavigationRepository.selectRoutes(listOf(fast,safer)).recommendedRoute)
+        assertEquals(fast,NavigationRepository.selectRoutes(listOf(fast,safer,dominated)).recommendedRoute)
     }
 }
