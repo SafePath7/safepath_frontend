@@ -27,13 +27,14 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.example.safepath_test1.wear.geo.LatLng
+import com.example.safepath_test1.wear.geo.METERS_PER_DEGREE
+import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.geo.haversineMeters
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-/** lat to first, lng to second - matches the phone's WearMessenger "lat,lng" encoding. */
-typealias LatLng = Pair<Double, Double>
 
 /** 위치가 새로 왔을 때 점과 지도가 이전 자리에서 새 자리로 미끄러지는 시간(ms). */
 private const val GLIDE_DURATION_MS = 1_000
@@ -94,8 +95,8 @@ private class SketchProjection(points: List<LatLng>, private val width: Float, h
     private val maxLng = points.maxOf { it.second }
 
     // 위도와 경도 1도의 실제 길이가 달라서, 경도에 cos(위도)를 곱해 가로세로 비율을 맞춘다.
-    private val metersPerDegreeLat = 111_320.0
-    private val metersPerDegreeLng = 111_320.0 * cos(Math.toRadians((minLat + maxLat) / 2))
+    private val metersPerDegreeLat = METERS_PER_DEGREE
+    private val metersPerDegreeLng = METERS_PER_DEGREE * cos(Math.toRadians((minLat + maxLat) / 2))
 
     // 점이 거의 한 곳에 모여 있어도 0으로 나누지 않도록 최소 폭을 둔다.
     private val heightMeters = max((maxLat - minLat) * metersPerDegreeLat, 20.0)
@@ -129,13 +130,14 @@ private class SketchProjection(points: List<LatLng>, private val width: Float, h
  */
 @Composable
 internal fun RouteMiniMap(
-    routePoints: List<LatLng>,
+    routePath: RoutePath,
     destination: LatLng?,
     current: LatLng?,
     view: MapViewState,
     modifier: Modifier = Modifier,
     background: MapBackground? = null,
 ) {
+    val routePoints = routePath.points
     if (routePoints.size < 2) return
 
     val glide = remember { PositionGlide(current) }
@@ -210,7 +212,7 @@ internal fun RouteMiniMap(
         if (shownCurrent == null) {
             drawPath(pathOf(routePoints.map { project(it) }), WatchColors.Route, style = solidStroke)
         } else {
-            val split = computeRouteProgress(routePoints, shownCurrent).traveledIndex
+            val split = routePath.progressAt(shownCurrent).traveledIndex
             val currentOffset = project(shownCurrent)
             val traveled = routePoints.subList(0, split + 1).map { project(it) } + currentOffset
             val remaining =

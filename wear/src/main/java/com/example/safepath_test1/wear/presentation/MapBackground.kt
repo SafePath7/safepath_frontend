@@ -7,16 +7,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.safepath_test1.wear.comm.MapKeys
+import com.example.safepath_test1.wear.geo.EARTH_CIRCUMFERENCE_M
+import com.example.safepath_test1.wear.geo.LatLng
+import com.example.safepath_test1.wear.geo.mercatorX
+import com.example.safepath_test1.wear.geo.mercatorY
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.Wearable
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlin.math.tan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,16 +25,6 @@ private const val TAG = "MapBackground"
 
 /** Mapbox 지도는 줌 0에서 세계 전체 폭이 512px이고, 줌이 1 오를 때마다 2배가 된다. */
 private const val MAP_TILE_PX = 512.0
-
-/** 적도 기준 지구 둘레(m). */
-private const val EARTH_CIRCUMFERENCE_M = 40_075_016.686
-
-internal fun mercatorX(lng: Double): Double = (lng + 180.0) / 360.0
-
-internal fun mercatorY(lat: Double): Double {
-    val radians = Math.toRadians(lat.coerceIn(-85.0511, 85.0511))
-    return 0.5 - ln(tan(PI / 4 + radians / 2)) / (2 * PI)
-}
 
 /** 이미지에서 실제로 보여 줄 정사각 영역(이미지 픽셀 기준). */
 internal class MapWindow(val left: Int, val top: Int, val size: Int)

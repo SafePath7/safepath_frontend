@@ -47,6 +47,8 @@ import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.ReleaseKeys
 import com.example.safepath_test1.wear.comm.StatusKeys
 import com.example.safepath_test1.wear.comm.StatusStates
+import com.example.safepath_test1.wear.geo.LatLng
+import com.example.safepath_test1.wear.geo.RoutePath
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
@@ -103,7 +105,10 @@ private data class RouteMapState(
     val current: LatLng?,
     /** 폰이 길찾기 서비스에서 받아 보낸 회전 안내. 아직 안 보내는 폰이면 비어 있다. */
     val steps: List<RouteStep> = emptyList(),
-)
+) {
+    /** 누적 거리를 한 번만 계산해 둔 경로. 수신할 때마다 새로 만들고, 프레임마다 다시 계산하지 않는다. */
+    val path: RoutePath = RoutePath(points)
+}
 
 /** Reverses WearMessenger's "lat,lng;lat,lng;..." encoding. */
 private fun decodeLatLngList(encoded: String?): List<LatLng> {
@@ -419,7 +424,7 @@ private fun GuidancePage(
                 mapView.returnToCurrent()
             }
     }
-    val progress = remember(routeMap) { routeMap?.let { computeRouteProgress(it.points, it.current) } }
+    val progress = remember(routeMap) { routeMap?.let { it.path.progressAt(it.current) } }
     // 현재 위치가 와야 남은 거리·다음 회전·도착 시각을 알 수 있다. 아직이면 경로 전체 거리만 보여 준다.
     val live = if (routeMap?.current != null) progress else null
     // 폰이 실제 회전 안내를 보내 주면 그걸 쓰고, 없으면 경로 선이 꺾인 모양으로 추측한다.
@@ -428,9 +433,9 @@ private fun GuidancePage(
             live?.let { progress ->
                 val map = routeMap!!
                 if (map.steps.isNotEmpty()) {
-                    computeNextTurnFromSteps(map.points, map.steps, progress.traveledMeters)
+                    computeNextTurnFromSteps(map.path, map.steps, progress.traveledMeters)
                 } else {
-                    computeNextTurn(map.points, progress.traveledMeters)
+                    computeNextTurn(map.path, progress.traveledMeters)
                 }
             }
         }
@@ -452,7 +457,7 @@ private fun GuidancePage(
     Box(modifier = Modifier.fillMaxSize()) {
         routeMap?.let { map ->
             RouteMiniMap(
-                routePoints = map.points,
+                routePath = map.path,
                 destination = map.destination,
                 current = map.current,
                 view = mapView,

@@ -1,9 +1,9 @@
 package com.example.safepath_test1.wear.presentation
 
+import com.example.safepath_test1.wear.geo.LatLng
+import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.geo.turnAngleDegrees
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 
 internal enum class TurnDirection {
     Left,
@@ -52,15 +52,15 @@ internal fun stepDirection(step: RouteStep): TurnDirection? {
  * 남은 회전이 없으면 도착점까지 직진으로 본다. 점이 2개 미만이면 null.
  */
 internal fun computeNextTurnFromSteps(
-    points: List<LatLng>,
+    path: RoutePath,
     steps: List<RouteStep>,
     alongMeters: Double,
 ): NextTurn? {
-    if (points.size < 2) return null
-    val total = cumulativeMeters(points).last()
+    if (path.points.size < 2) return null
+    val total = path.totalMeters
     var previousAlong = 0.0
     for (step in steps) {
-        val along = maxOf(previousAlong, computeRouteProgress(points, step.point).traveledMeters)
+        val along = maxOf(previousAlong, path.progressAt(step.point).traveledMeters)
         previousAlong = along
         // 이미 지나친 단계는 건너뛴다(1m 여유).
         if (along <= alongMeters + 1.0) continue
@@ -70,6 +70,13 @@ internal fun computeNextTurnFromSteps(
     }
     return NextTurn(TurnDirection.Straight, (total - alongMeters).coerceAtLeast(0.0))
 }
+
+/** 경로가 점 목록으로만 있을 때 쓰는 편의 함수. 같은 경로로 자주 부른다면 [RoutePath]를 만들어 둔다. */
+internal fun computeNextTurnFromSteps(
+    points: List<LatLng>,
+    steps: List<RouteStep>,
+    alongMeters: Double,
+): NextTurn? = computeNextTurnFromSteps(RoutePath(points), steps, alongMeters)
 
 /** 다음 안내: 방향과, 지금 위치에서 거기까지 경로를 따라 남은 거리. */
 internal data class NextTurn(val direction: TurnDirection, val distanceMeters: Double)
@@ -83,32 +90,15 @@ private const val TURN_LOOK_METERS = 15.0
 /** 이 거리(m) 안이면 "지금 우회전"처럼 말한다. */
 private const val TURN_NOW_METERS = 15.0
 
-/** 두 좌표 사이의 방위각(도, 북쪽 0, 시계방향). */
-internal fun bearingDegrees(from: LatLng, to: LatLng): Double {
-    val lat1 = Math.toRadians(from.first)
-    val lat2 = Math.toRadians(to.first)
-    val dLng = Math.toRadians(to.second - from.second)
-    val y = sin(dLng) * cos(lat2)
-    val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLng)
-    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
-}
-
-/** [before]→[at]로 오다가 [at]→[after]로 갈 때 꺾이는 각도(도). 양수면 오른쪽, 음수면 왼쪽. */
-internal fun turnAngleDegrees(before: LatLng, at: LatLng, after: LatLng): Double {
-    var angle = bearingDegrees(at, after) - bearingDegrees(before, at)
-    while (angle > 180.0) angle -= 360.0
-    while (angle <= -180.0) angle += 360.0
-    return angle
-}
-
 /**
  * 경로 위 [alongMeters] 지점(출발점에서 걸어온 거리) 앞쪽에서 처음 나오는 회전을 찾는다.
  * 폰이 보내는 점은 직선 구간이 단순화돼 있어서 점이 곧 모퉁이다. 회전이 없으면 도착점까지 직진으로 본다.
  * 점이 2개 미만이면 null.
  */
-internal fun computeNextTurn(points: List<LatLng>, alongMeters: Double): NextTurn? {
+internal fun computeNextTurn(path: RoutePath, alongMeters: Double): NextTurn? {
+    val points = path.points
     if (points.size < 2) return null
-    val cumulative = cumulativeMeters(points)
+    val cumulative = path.cumulative
     for (i in 1 until points.lastIndex) {
         // 이미 지나친 모퉁이는 건너뛴다(1m 여유).
         if (cumulative[i] <= alongMeters + 1.0) continue
@@ -124,6 +114,10 @@ internal fun computeNextTurn(points: List<LatLng>, alongMeters: Double): NextTur
     }
     return NextTurn(TurnDirection.Straight, (cumulative.last() - alongMeters).coerceAtLeast(0.0))
 }
+
+/** 경로가 점 목록으로만 있을 때 쓰는 편의 함수. 같은 경로로 자주 부른다면 [RoutePath]를 만들어 둔다. */
+internal fun computeNextTurn(points: List<LatLng>, alongMeters: Double): NextTurn? =
+    computeNextTurn(RoutePath(points), alongMeters)
 
 /** 위쪽 상자 문구: "120m 후 우회전", "지금 좌회전", "80m 후 오른쪽 방향", "650m 직진". */
 internal fun turnBannerText(turn: NextTurn): String {
