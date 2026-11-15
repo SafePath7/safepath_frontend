@@ -70,18 +70,22 @@ class WatchSensorManager(context: Context) {
                         else -> return
                     } ?: return
                 _motionData.value = updated
-                Log.d(
-                    TAG,
-                    "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f)"
-                        .format(
-                            updated.accelX,
-                            updated.accelY,
-                            updated.accelZ,
-                            updated.gyroX,
-                            updated.gyroY,
-                            updated.gyroZ,
-                        ),
-                )
+                // 20Hz라 로그 문자열을 매번 만들면 낭비다. 필요할 때만
+                // `adb shell setprop log.tag.WatchSensorManager DEBUG`로 켠다.
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(
+                        TAG,
+                        "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f)"
+                            .format(
+                                updated.accelX,
+                                updated.accelY,
+                                updated.accelZ,
+                                updated.gyroX,
+                                updated.gyroY,
+                                updated.gyroZ,
+                            ),
+                    )
+                }
             }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}

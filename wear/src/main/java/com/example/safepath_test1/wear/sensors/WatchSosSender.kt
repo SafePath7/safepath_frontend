@@ -1,11 +1,8 @@
 package com.example.safepath_test1.wear.sensors
 
 import android.content.Context
-import android.util.Log
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.SosKeys
-import com.google.android.gms.wearable.PutDataMapRequest
-import com.google.android.gms.wearable.Wearable
 
 private const val TAG = "WatchSosSender"
 
@@ -20,15 +17,14 @@ private const val TAG = "WatchSosSender"
 object WatchSosSender {
 
     fun send(context: Context) {
-        val putDataMapRequest =
-            PutDataMapRequest.create(DataLayerPaths.SOS).apply {
-                dataMap.putLong(SosKeys.TRIGGERED_AT, System.currentTimeMillis())
-            }
-        val request = putDataMapRequest.asPutDataRequest().setUrgent()
-
-        Wearable.getDataClient(context)
-            .putDataItem(request)
-            .addOnSuccessListener { Log.i(TAG, "SOS sent to phone") }
-            .addOnFailureListener { e -> Log.e(TAG, "Failed to send SOS to phone", e) }
+        DataLayerSender.putUrgent(
+            context = context,
+            path = DataLayerPaths.SOS,
+            tag = TAG,
+            failureMessage = "Failed to send SOS to phone",
+            successMessage = "SOS sent to phone",
+        ) {
+            putLong(SosKeys.TRIGGERED_AT, System.currentTimeMillis())
+        }
     }
 }

@@ -1,11 +1,8 @@
 package com.example.safepath_test1.wear.sensors
 
 import android.content.Context
-import android.util.Log
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.MotionKeys
-import com.google.android.gms.wearable.PutDataMapRequest
-import com.google.android.gms.wearable.Wearable
 
 private const val TAG = "WatchMotionSender"
 
@@ -22,20 +19,19 @@ private const val TAG = "WatchMotionSender"
 object WatchMotionSender {
 
     fun send(context: Context, motion: MotionData) {
-        val putDataMapRequest =
-            PutDataMapRequest.create(DataLayerPaths.MOTION).apply {
-                dataMap.putFloat(MotionKeys.ACCEL_X, motion.accelX)
-                dataMap.putFloat(MotionKeys.ACCEL_Y, motion.accelY)
-                dataMap.putFloat(MotionKeys.ACCEL_Z, motion.accelZ)
-                dataMap.putFloat(MotionKeys.GYRO_X, motion.gyroX)
-                dataMap.putFloat(MotionKeys.GYRO_Y, motion.gyroY)
-                dataMap.putFloat(MotionKeys.GYRO_Z, motion.gyroZ)
-                dataMap.putLong(MotionKeys.TIMESTAMP, motion.timestamp)
-            }
-        val request = putDataMapRequest.asPutDataRequest().setUrgent()
-
-        Wearable.getDataClient(context).putDataItem(request).addOnFailureListener { e ->
-            Log.e(TAG, "Failed to relay motion data to phone", e)
+        DataLayerSender.putUrgent(
+            context = context,
+            path = DataLayerPaths.MOTION,
+            tag = TAG,
+            failureMessage = "Failed to relay motion data to phone",
+        ) {
+            putFloat(MotionKeys.ACCEL_X, motion.accelX)
+            putFloat(MotionKeys.ACCEL_Y, motion.accelY)
+            putFloat(MotionKeys.ACCEL_Z, motion.accelZ)
+            putFloat(MotionKeys.GYRO_X, motion.gyroX)
+            putFloat(MotionKeys.GYRO_Y, motion.gyroY)
+            putFloat(MotionKeys.GYRO_Z, motion.gyroZ)
+            putLong(MotionKeys.TIMESTAMP, motion.timestamp)
         }
     }
 }

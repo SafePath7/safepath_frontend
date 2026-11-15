@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.VoiceKeys
-import com.google.android.gms.wearable.PutDataMapRequest
-import com.google.android.gms.wearable.Wearable
 import java.util.concurrent.Executors
 
 private const val TAG = "WatchVoiceSender"
@@ -36,25 +34,22 @@ object WatchVoiceSender {
         val aac = encodeOrNull(pcm)
         // 인코더가 이번 조각의 소리를 다음 조각과 함께 내보내면 이번 결과는 비어 있다. 보낼 게 없으면 건너뛴다.
         if (aac != null && aac.isEmpty()) return
-        val request =
-            PutDataMapRequest.create(DataLayerPaths.VOICE)
-                .apply {
-                    if (aac != null) {
-                        dataMap.putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_AAC)
-                        dataMap.putByteArray(VoiceKeys.AUDIO, aac)
-                    } else {
-                        dataMap.putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_PCM16)
-                        dataMap.putByteArray(VoiceKeys.AUDIO, pcm)
-                    }
-                    dataMap.putLong(VoiceKeys.SEQ, nextSeq++)
-                    dataMap.putLong(VoiceKeys.CAPTURED_AT, capturedAt)
-                }
-                .asPutDataRequest()
-                .setUrgent()
-
-        Wearable.getDataClient(context)
-            .putDataItem(request)
-            .addOnFailureListener { e -> Log.e(TAG, "Failed to relay audio chunk to phone", e) }
+        DataLayerSender.putUrgent(
+            context = context,
+            path = DataLayerPaths.VOICE,
+            tag = TAG,
+            failureMessage = "Failed to relay audio chunk to phone",
+        ) {
+            if (aac != null) {
+                putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_AAC)
+                putByteArray(VoiceKeys.AUDIO, aac)
+            } else {
+                putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_PCM16)
+                putByteArray(VoiceKeys.AUDIO, pcm)
+            }
+            putLong(VoiceKeys.SEQ, nextSeq++)
+            putLong(VoiceKeys.CAPTURED_AT, capturedAt)
+        }
     }
 
     private fun encodeOrNull(pcm: ByteArray): ByteArray? {
