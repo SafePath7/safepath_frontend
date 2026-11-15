@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.example.safepath_test1.wear.comm.MapKeys
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.Wearable
@@ -20,9 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val TAG = "MapBackground"
-
-/** 폰의 WearMapImageSender가 지도 이미지를 보내는 경로 - 같은 값으로 맞춰야 한다. */
-internal const val PATH_MAP = "/safepath/map"
 
 /** Mapbox 지도는 줌 0에서 세계 전체 폭이 512px이고, 줌이 1 오를 때마다 2배가 된다. */
 private const val MAP_TILE_PX = 512.0
@@ -99,7 +97,7 @@ internal class MapBackground(val image: ImageBitmap, val projection: MapProjecti
 internal suspend fun loadMapBackground(context: Context, dataMap: DataMap): MapBackground? =
     withContext(Dispatchers.IO) {
         try {
-            val asset = dataMap.getAsset("image") ?: return@withContext null
+            val asset = dataMap.getAsset(MapKeys.IMAGE) ?: return@withContext null
             val response = Tasks.await(Wearable.getDataClient(context).getFdForAsset(asset))
             val bitmap =
                 response.inputStream.use { BitmapFactory.decodeStream(it) }
@@ -108,10 +106,10 @@ internal suspend fun loadMapBackground(context: Context, dataMap: DataMap): MapB
                 image = bitmap.asImageBitmap(),
                 projection =
                     MapProjection(
-                        centerLat = dataMap.getDouble("centerLat"),
-                        centerLng = dataMap.getDouble("centerLng"),
-                        zoom = dataMap.getDouble("zoom"),
-                        imagePx = dataMap.getInt("imagePx"),
+                        centerLat = dataMap.getDouble(MapKeys.CENTER_LAT),
+                        centerLng = dataMap.getDouble(MapKeys.CENTER_LNG),
+                        zoom = dataMap.getDouble(MapKeys.ZOOM),
+                        imagePx = dataMap.getInt(MapKeys.IMAGE_PX),
                     ),
             )
         } catch (e: Exception) {

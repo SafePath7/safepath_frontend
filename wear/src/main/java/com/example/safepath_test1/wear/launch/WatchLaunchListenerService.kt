@@ -7,15 +7,13 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.presentation.MainActivity
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WatchLaunchListener"
-
-/** Must match WatchLauncher.PATH_LAUNCH_WATCH (app module) - the two modules can't share code. */
-private const val PATH_LAUNCH_WATCH = "/safepath/launch_watch"
 
 private const val CHANNEL_ID = "safepath_launch"
 private const val NOTIFICATION_ID = 1001
@@ -34,7 +32,7 @@ class WatchLaunchListenerService : WearableListenerService() {
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         for (event in dataEvents) {
             if (event.type != DataEvent.TYPE_CHANGED) continue
-            if (event.dataItem.uri.path != PATH_LAUNCH_WATCH) continue
+            if (event.dataItem.uri.path != DataLayerPaths.LAUNCH_WATCH) continue
 
             Log.i(TAG, "Launch request received from phone")
             launchDirectly()

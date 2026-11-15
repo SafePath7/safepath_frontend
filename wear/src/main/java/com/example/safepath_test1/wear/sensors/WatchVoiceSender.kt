@@ -2,18 +2,13 @@ package com.example.safepath_test1.wear.sensors
 
 import android.content.Context
 import android.util.Log
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.VoiceKeys
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import java.util.concurrent.Executors
 
 private const val TAG = "WatchVoiceSender"
-
-/** Phone-side WearVoiceRelayService (app module) listens on this same path - keep both in sync. */
-const val PATH_VOICE = "/safepath/voice"
-
-/** "format" 값. 폰 WearVoiceRelayService도 같은 값을 쓴다. */
-private const val FORMAT_AAC = "aac"
-private const val FORMAT_PCM16 = "pcm16"
 
 /**
  * WatchVoiceRecorder가 녹음한 1초 조각을 AAC로 압축해서 폰으로 보낸다.
@@ -42,17 +37,17 @@ object WatchVoiceSender {
         // 인코더가 이번 조각의 소리를 다음 조각과 함께 내보내면 이번 결과는 비어 있다. 보낼 게 없으면 건너뛴다.
         if (aac != null && aac.isEmpty()) return
         val request =
-            PutDataMapRequest.create(PATH_VOICE)
+            PutDataMapRequest.create(DataLayerPaths.VOICE)
                 .apply {
                     if (aac != null) {
-                        dataMap.putString("format", FORMAT_AAC)
-                        dataMap.putByteArray("audio", aac)
+                        dataMap.putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_AAC)
+                        dataMap.putByteArray(VoiceKeys.AUDIO, aac)
                     } else {
-                        dataMap.putString("format", FORMAT_PCM16)
-                        dataMap.putByteArray("audio", pcm)
+                        dataMap.putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_PCM16)
+                        dataMap.putByteArray(VoiceKeys.AUDIO, pcm)
                     }
-                    dataMap.putLong("seq", nextSeq++)
-                    dataMap.putLong("capturedAt", capturedAt)
+                    dataMap.putLong(VoiceKeys.SEQ, nextSeq++)
+                    dataMap.putLong(VoiceKeys.CAPTURED_AT, capturedAt)
                 }
                 .asPutDataRequest()
                 .setUrgent()

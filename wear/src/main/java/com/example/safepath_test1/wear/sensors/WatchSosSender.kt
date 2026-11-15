@@ -2,13 +2,12 @@ package com.example.safepath_test1.wear.sensors
 
 import android.content.Context
 import android.util.Log
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.SosKeys
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 
 private const val TAG = "WatchSosSender"
-
-/** Phone-side WearSosRelayService (app module) listens on this same path - keep both in sync. */
-const val PATH_SOS = "/safepath/sos"
 
 /**
  * Sends an SOS trigger from the watch to the paired phone over the Wearable Data Layer, using the
@@ -22,8 +21,8 @@ object WatchSosSender {
 
     fun send(context: Context) {
         val putDataMapRequest =
-            PutDataMapRequest.create(PATH_SOS).apply {
-                dataMap.putLong("triggeredAt", System.currentTimeMillis())
+            PutDataMapRequest.create(DataLayerPaths.SOS).apply {
+                dataMap.putLong(SosKeys.TRIGGERED_AT, System.currentTimeMillis())
             }
         val request = putDataMapRequest.asPutDataRequest().setUrgent()
 

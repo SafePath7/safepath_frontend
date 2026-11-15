@@ -43,6 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.ReleaseKeys
+import com.example.safepath_test1.wear.comm.StatusKeys
+import com.example.safepath_test1.wear.comm.StatusStates
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
@@ -57,10 +61,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val TAG = "WearApp"
-private const val PATH_STATUS = "/safepath/status"
-
-/** 폰이 위험상황을 해제했을 때 보내는 DataItem 경로. DataMap의 "updatedAt"(밀리초)만 쓴다. */
-private const val PATH_RELEASE = "/safepath/release"
 
 /** 폰·워치 시계가 조금 어긋나도 방금 한 해제 신호를 놓치지 않도록 두는 여유(ms). */
 private const val RELEASE_CLOCK_SKEW_MS = 5_000L
@@ -159,35 +159,35 @@ fun WearApp() {
     DisposableEffect(Unit) { onDispose { voiceRecorder.stop() } }
 
     fun applyDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
-        val updatedAt = dataMap.getLong("updatedAt")
+        val updatedAt = dataMap.getLong(StatusKeys.UPDATED_AT)
         lastReceivedAt = updatedAt
         val receivedStatus =
-            when (dataMap.getString("state")) {
-                "SEARCHING" -> RouteStatus.Searching
-                "FOUND" ->
+            when (dataMap.getString(StatusKeys.STATE)) {
+                StatusStates.SEARCHING -> RouteStatus.Searching
+                StatusStates.FOUND ->
                     RouteStatus.Found(
-                        routeType = dataMap.getString("routeType") ?: "경로",
-                        distanceKm = "%.1f".format(dataMap.getDouble("distanceMeters") / 1000.0),
-                        destinationName = dataMap.getString("destinationName"),
+                        routeType = dataMap.getString(StatusKeys.ROUTE_TYPE) ?: "경로",
+                        distanceKm = "%.1f".format(dataMap.getDouble(StatusKeys.DISTANCE_METERS) / 1000.0),
+                        destinationName = dataMap.getString(StatusKeys.DESTINATION_NAME),
                     )
                 else -> RouteStatus.Idle
             }
         status = if (isStatusStale(updatedAt)) RouteStatus.Stale else receivedStatus
 
-        val points = decodeLatLngList(dataMap.getString("routePoints"))
+        val points = decodeLatLngList(dataMap.getString(StatusKeys.ROUTE_POINTS))
         val destination =
-            if (dataMap.containsKey("destLat") && dataMap.containsKey("destLng")) {
-                dataMap.getDouble("destLat") to dataMap.getDouble("destLng")
+            if (dataMap.containsKey(StatusKeys.DEST_LAT) && dataMap.containsKey(StatusKeys.DEST_LNG)) {
+                dataMap.getDouble(StatusKeys.DEST_LAT) to dataMap.getDouble(StatusKeys.DEST_LNG)
             } else {
                 null
             }
         val current =
-            if (dataMap.containsKey("curLat") && dataMap.containsKey("curLng")) {
-                dataMap.getDouble("curLat") to dataMap.getDouble("curLng")
+            if (dataMap.containsKey(StatusKeys.CUR_LAT) && dataMap.containsKey(StatusKeys.CUR_LNG)) {
+                dataMap.getDouble(StatusKeys.CUR_LAT) to dataMap.getDouble(StatusKeys.CUR_LNG)
             } else {
                 null
             }
-        val steps = decodeRouteSteps(dataMap.getString("routeSteps"))
+        val steps = decodeRouteSteps(dataMap.getString(StatusKeys.ROUTE_STEPS))
         routeMap = if (points.size >= 2) RouteMapState(points, destination, current, steps) else null
 
         Log.i(TAG, "New status=$status")
@@ -208,8 +208,8 @@ fun WearApp() {
                 for (i in 0 until dataItems.count) {
                     val item = dataItems[i]
                     when (item.uri.path) {
-                        PATH_STATUS -> applyDataMap(DataMapItem.fromDataItem(item).dataMap)
-                        PATH_MAP -> applyMapDataMap(DataMapItem.fromDataItem(item).dataMap)
+                        DataLayerPaths.STATUS -> applyDataMap(DataMapItem.fromDataItem(item).dataMap)
+                        DataLayerPaths.MAP -> applyMapDataMap(DataMapItem.fromDataItem(item).dataMap)
                     }
                 }
                 dataItems.release()
@@ -225,11 +225,11 @@ fun WearApp() {
                 Log.i(TAG, "DataEvent type=${event.type} path=${event.dataItem.uri.path}")
                 if (event.type == DataEvent.TYPE_CHANGED) {
                     when (event.dataItem.uri.path) {
-                        PATH_STATUS -> applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
-                        PATH_MAP -> applyMapDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
-                        PATH_RELEASE ->
+                        DataLayerPaths.STATUS -> applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                        DataLayerPaths.MAP -> applyMapDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                        DataLayerPaths.RELEASE ->
                             releaseSignalAt =
-                                DataMapItem.fromDataItem(event.dataItem).dataMap.getLong("updatedAt")
+                                DataMapItem.fromDataItem(event.dataItem).dataMap.getLong(ReleaseKeys.UPDATED_AT)
                     }
                 }
             }
