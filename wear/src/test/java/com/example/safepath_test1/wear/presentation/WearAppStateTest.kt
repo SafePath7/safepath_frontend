@@ -49,10 +49,11 @@ class WearAppStateTest {
         state.markStaleIfNeeded(now = 10_000_000L)
         assertEquals(RouteStatus.Idle, state.status) // 아직 아무것도 못 받았다
 
+        // 오래됐는지는 폰이 보낸 시각(updatedAt = 1_000)부터 센다. 딱 STALE_AFTER_MS가 지난 시점까지는 괜찮다.
         state.onStatus(StatusUpdate(1_000L, found, map), now = 2_000L)
-        state.markStaleIfNeeded(now = 2_000L + STALE_AFTER_MS) // 아직 괜찮다
+        state.markStaleIfNeeded(now = 1_000L + STALE_AFTER_MS)
         assertEquals(found, state.status)
-        state.markStaleIfNeeded(now = 2_000L + STALE_AFTER_MS + 1_000L)
+        state.markStaleIfNeeded(now = 1_000L + STALE_AFTER_MS + 1L)
         assertEquals(RouteStatus.Stale, state.status)
     }
 
