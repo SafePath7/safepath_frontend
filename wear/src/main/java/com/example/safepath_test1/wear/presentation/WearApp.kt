@@ -49,6 +49,9 @@ import com.example.safepath_test1.wear.comm.StatusKeys
 import com.example.safepath_test1.wear.comm.StatusStates
 import com.example.safepath_test1.wear.geo.LatLng
 import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.state.AlertStage
+import com.example.safepath_test1.wear.state.AlertState
+import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
@@ -64,28 +67,11 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "WearApp"
 
-/** 폰·워치 시계가 조금 어긋나도 방금 한 해제 신호를 놓치지 않도록 두는 여유(ms). */
-private const val RELEASE_CLOCK_SKEW_MS = 5_000L
-
-/** 이 위험상황(요청 시각 [alertRequestedAt]) 이후에 온 해제 신호인지. 옛 위험상황의 낡은 신호는 무시한다. */
-internal fun shouldReleaseAlert(releaseSignalAt: Long, alertRequestedAt: Long): Boolean =
-    releaseSignalAt > 0L && releaseSignalAt >= alertRequestedAt - RELEASE_CLOCK_SKEW_MS
-
 /** If no update has arrived from the phone in this long, treat it as stale/disconnected. */
 internal const val STALE_AFTER_MS = 10 * 60 * 1000L
 
 internal fun isStatusStale(updatedAt: Long, now: Long = System.currentTimeMillis()): Boolean =
     updatedAt <= 0L || now - updatedAt > STALE_AFTER_MS
-
-/** 확인 질문(UI-W3)에 응답이 없으면 보호자 알림으로 넘어가기까지의 시간. */
-private const val CHECK_IN_COUNTDOWN_MS = 30_000L
-
-/** 위험 감지 흐름: 평소(길안내) → 확인 질문(UI-W3) → 보호자 알림(UI-W4). */
-private enum class AlertStage {
-    None,
-    CheckIn,
-    Alerted,
-}
 
 private sealed class RouteStatus {
     data object Idle : RouteStatus()
@@ -261,36 +247,29 @@ fun WearApp() {
         }
     }
 
-    var alertStage by remember { mutableStateOf(AlertStage.None) }
-    var checkInStartedAt by remember { mutableStateOf(0L) }
+    // 위험 감지 흐름의 상태. 전이 규칙은 AlertState에 있고, 여기서는 호출만 한다.
+    var alert by remember { mutableStateOf(AlertState()) }
     var checkInRemainingMs by remember { mutableStateOf(CHECK_IN_COUNTDOWN_MS) }
-    var helpRequestedAt by remember { mutableStateOf(0L) }
 
     // 지금은 방패 아이콘 길게 누르기(테스트용)로 호출된다. AI 서버가 연결되면 실제 위험 신호에서 호출한다.
     fun startCheckIn() {
-        checkInStartedAt = System.currentTimeMillis()
         checkInRemainingMs = CHECK_IN_COUNTDOWN_MS
-        alertStage = AlertStage.CheckIn
+        alert = alert.startCheckIn(System.currentTimeMillis())
     }
 
     // 보호자 연동 전이라 SOS 버튼과 같은 경로(워치 → 폰 알림)로 보낸다.
     fun requestHelp() {
         WatchSosSender.send(context)
-        helpRequestedAt = System.currentTimeMillis()
-        alertStage = AlertStage.Alerted
+        alert = alert.requestHelp(System.currentTimeMillis())
     }
 
     // 폰에서 해제 신호가 오면 위험상황 화면을 닫고 평소 화면(길안내)으로 돌아간다.
-    LaunchedEffect(releaseSignalAt) {
-        if (alertStage == AlertStage.Alerted && shouldReleaseAlert(releaseSignalAt, helpRequestedAt)) {
-            alertStage = AlertStage.None
-        }
-    }
+    LaunchedEffect(releaseSignalAt) { alert = alert.releasedBy(releaseSignalAt) }
 
-    LaunchedEffect(alertStage, checkInStartedAt) {
-        if (alertStage != AlertStage.CheckIn) return@LaunchedEffect
+    LaunchedEffect(alert.stage, alert.checkInStartedAt) {
+        if (alert.stage != AlertStage.CheckIn) return@LaunchedEffect
         while (true) {
-            val remaining = CHECK_IN_COUNTDOWN_MS - (System.currentTimeMillis() - checkInStartedAt)
+            val remaining = alert.checkInRemainingMs(System.currentTimeMillis())
             if (remaining <= 0) {
                 requestHelp()
                 break
@@ -302,18 +281,18 @@ fun WearApp() {
 
     MaterialTheme {
         Box(modifier = Modifier.fillMaxSize()) {
-            when (alertStage) {
+            when (alert.stage) {
                 AlertStage.CheckIn ->
                     CheckInScreen(
                         remainingMs = checkInRemainingMs,
                         totalMs = CHECK_IN_COUNTDOWN_MS,
-                        onOkay = { alertStage = AlertStage.None },
+                        onOkay = { alert = alert.dismiss() },
                         onHelp = { requestHelp() },
                     )
                 AlertStage.Alerted ->
                     GuardianAlertedScreen(
-                        requestedAt = helpRequestedAt,
-                        onTestRelease = { alertStage = AlertStage.None },
+                        requestedAt = alert.helpRequestedAt,
+                        onTestRelease = { alert = alert.dismiss() },
                     )
                 AlertStage.None -> MainScreen(
                     status = status,
