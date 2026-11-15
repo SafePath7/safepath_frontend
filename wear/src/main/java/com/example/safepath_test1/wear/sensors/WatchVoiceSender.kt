@@ -24,6 +24,24 @@ object WatchVoiceSender {
     private var encoderUnavailable = false
     private var nextSeq = 0L
 
+    /**
+     * 새 녹음을 시작할 때 부른다. 순번을 0부터 다시 세고, 지난번에 압축이 안 됐던 기기도 다시 시도하도록 압축기를 새로 만든다.
+     * 순번이 0으로 돌아가도 폰은 `capturedAt`이 더 새로우면 새 녹음으로 받아들인다(VoiceChunkGate).
+     * 압축기를 만들고 없애는 일은 조각을 보내는 스레드에서 해서, 보내던 조각과 겹치지 않는다.
+     */
+    fun startSession() {
+        executor.execute {
+            releaseEncoder()
+            encoderUnavailable = false
+            nextSeq = 0L
+        }
+    }
+
+    /** 녹음이 끝났을 때 부른다. 압축기가 잡고 있는 코덱 자원을 놓는다. */
+    fun stopSession() {
+        executor.execute { releaseEncoder() }
+    }
+
     fun send(context: Context, audioBytes: ByteArray) {
         val appContext = context.applicationContext
         val capturedAt = System.currentTimeMillis()
@@ -59,10 +77,14 @@ object WatchVoiceSender {
             current.encode(pcm)
         } catch (e: Exception) {
             Log.e(TAG, "AAC encoding failed - sending raw PCM instead", e)
-            encoder?.release()
-            encoder = null
+            releaseEncoder()
             encoderUnavailable = true
             null
         }
+    }
+
+    private fun releaseEncoder() {
+        encoder?.release()
+        encoder = null
     }
 }

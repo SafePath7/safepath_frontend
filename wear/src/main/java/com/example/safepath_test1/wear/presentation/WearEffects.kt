@@ -46,12 +46,23 @@ internal fun SensorEffect(context: Context) {
 internal fun VoiceCaptureEffect(context: Context, active: Boolean) {
     val voiceRecorder = remember { WatchVoiceRecorder(context) }
     LaunchedEffect(active) {
-        if (active) voiceRecorder.start() else voiceRecorder.stop()
+        if (active) {
+            WatchVoiceSender.startSession()
+            voiceRecorder.start()
+        } else {
+            voiceRecorder.stop()
+            WatchVoiceSender.stopSession()
+        }
     }
     LaunchedEffect(voiceRecorder) {
         voiceRecorder.audioChunks.collect { chunk -> WatchVoiceSender.send(context, chunk) }
     }
-    DisposableEffect(Unit) { onDispose { voiceRecorder.stop() } }
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceRecorder.stop()
+            WatchVoiceSender.stopSession()
+        }
+    }
 }
 
 /** 폰이 보내는 값(상태, 지도 이미지, 해제 신호)을 받아 [state]에 반영한다. 받는 방법과 순서 규칙은 WatchDataReceiver에 있다. */
