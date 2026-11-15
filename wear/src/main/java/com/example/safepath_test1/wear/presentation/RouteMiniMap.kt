@@ -67,6 +67,21 @@ internal class MapViewState {
         returnToCurrent()
         viewMeters = DEFAULT_VIEW_METERS
     }
+
+    /**
+     * 손가락 한 번의 움직임(끌기 [panXPx], [panYPx]와 핀치 [zoom])을 지도에 적용한다. [widthPx]는 지도 폭(픽셀).
+     * 끈 거리는 확대를 바꾸기 전의 보는 지름으로 계산한다(그래야 확대하면서 끌어도 손가락을 따라간다).
+     */
+    fun applyGesture(panXPx: Float, panYPx: Float, zoom: Float, widthPx: Float, nowMs: Long) {
+        val metersPerPx = viewMeters / widthPx
+        // 손가락을 오른쪽으로 끌면 지도가 오른쪽으로 가니까 보는 위치는 서쪽으로 간다.
+        panEastMeters = (panEastMeters - panXPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
+        // 손가락을 아래로 끌면 지도가 아래로 가니까 보는 위치는 북쪽으로 간다.
+        panNorthMeters = (panNorthMeters + panYPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
+        // 두 손가락을 벌리면(zoom > 1) 더 가까이, 모으면 더 넓게.
+        viewMeters = (viewMeters / zoom).coerceIn(MIN_VIEW_METERS, MAX_VIEW_METERS)
+        lastTouchAt = nowMs
+    }
 }
 
 /**

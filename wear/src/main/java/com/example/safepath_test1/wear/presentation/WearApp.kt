@@ -395,9 +395,6 @@ private fun MainScreen(
     }
 }
 
-/** 남은 거리가 이 값(m) 아래면 도착한 것으로 본다. */
-private const val ARRIVED_METERS = 20.0
-
 /**
  * UI-W1(W-01) 경로 안내 페이지(전체 화면 지도 초안).
  * 화면 전체를 지도가 채우고(한 손가락으로 끌어서 둘러보기, 두 손가락 핀치로 확대/축소, 두 번 탭하면 내 위치로) 그 위에 링, 시각, 이동중 배지, 위쪽 회전 안내 상자(y80),
@@ -424,32 +421,16 @@ private fun GuidancePage(
                 mapView.returnToCurrent()
             }
     }
-    val progress = remember(routeMap) { routeMap?.let { it.path.progressAt(it.current) } }
-    // 현재 위치가 와야 남은 거리·다음 회전·도착 시각을 알 수 있다. 아직이면 경로 전체 거리만 보여 준다.
-    val live = if (routeMap?.current != null) progress else null
-    // 폰이 실제 회전 안내를 보내 주면 그걸 쓰고, 없으면 경로 선이 꺾인 모양으로 추측한다.
-    val turn =
-        remember(routeMap) {
-            live?.let { progress ->
-                val map = routeMap!!
-                if (map.steps.isNotEmpty()) {
-                    computeNextTurnFromSteps(map.path, map.steps, progress.traveledMeters)
-                } else {
-                    computeNextTurn(map.path, progress.traveledMeters)
-                }
-            }
+    // 경로와 현재 위치에서 화면에 보여 줄 값(진행 링, 다음 회전, 도착 여부, 거리 글자)을 만든다.
+    val ui =
+        remember(routeMap, current.distanceKm) {
+            buildGuidanceUiState(
+                path = routeMap?.path,
+                current = routeMap?.current,
+                steps = routeMap?.steps.orEmpty(),
+                totalDistanceKm = current.distanceKm,
+            )
         }
-    val arrived = live != null && live.remainingMeters < ARRIVED_METERS
-
-    val bannerDirection = if (arrived || turn == null) TurnDirection.Straight else turn.direction
-    val bannerText =
-        when {
-            arrived -> "목적지 도착"
-            turn != null -> turnBannerText(turn)
-            else -> "위치 확인 중"
-        }
-    val summary =
-        if (live != null) "남은 ${formatDistance(live.remainingMeters)}" else "총 ${current.distanceKm}km"
 
     val sosReserved = s.sosReservedHeight()
     val panelHeight = sosReserved + s.dp(86)
@@ -475,18 +456,13 @@ private fun GuidancePage(
                     }
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
-                            val metersPerPx = mapView.viewMeters / size.width
-                            // 손가락을 오른쪽으로 끌면 지도가 오른쪽으로 가니까 보는 위치는 서쪽으로 간다.
-                            mapView.panEastMeters =
-                                (mapView.panEastMeters - pan.x * metersPerPx)
-                                    .coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
-                            mapView.panNorthMeters =
-                                (mapView.panNorthMeters + pan.y * metersPerPx)
-                                    .coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
-                            // 두 손가락을 벌리면(zoom > 1) 더 가까이, 모으면 더 넓게.
-                            mapView.viewMeters =
-                                (mapView.viewMeters / zoom).coerceIn(MIN_VIEW_METERS, MAX_VIEW_METERS)
-                            mapView.lastTouchAt = System.currentTimeMillis()
+                            mapView.applyGesture(
+                                panXPx = pan.x,
+                                panYPx = pan.y,
+                                zoom = zoom,
+                                widthPx = size.width.toFloat(),
+                                nowMs = System.currentTimeMillis(),
+                            )
                         }
                     }
             )
@@ -508,12 +484,12 @@ private fun GuidancePage(
                     Brush.verticalGradient(listOf(Color.Transparent, WatchColors.Bg.copy(alpha = 0.92f)))
                 )
         )
-        WatchRing(progress = progress?.progress ?: 0f, color = WatchColors.Route)
+        WatchRing(progress = ui.ringProgress, color = WatchColors.Route)
         WatchClock(Modifier.align(Alignment.TopCenter).offset(y = s.dp(24)))
         MovingBadge(Modifier.align(Alignment.TopCenter).offset(y = s.dp(48)))
         TurnBanner(
-            direction = bannerDirection,
-            text = bannerText,
+            direction = ui.bannerDirection,
+            text = ui.bannerText,
             modifier = Modifier.align(Alignment.TopCenter).offset(y = s.dp(80)),
         )
         Column(
@@ -524,7 +500,7 @@ private fun GuidancePage(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = summary,
+                text = ui.summaryText,
                 color = Color.White,
                 fontSize = s.sp(17),
                 fontWeight = FontWeight.ExtraBold,
