@@ -5,7 +5,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,15 +12,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -147,28 +143,5 @@ internal fun GuidancePage(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-/** "● 이동중" 알약 배지. 명세: 높이 22, 앞에 초록 점. */
-@Composable
-private fun MovingBadge(modifier: Modifier = Modifier) {
-    val s = rememberWatchScale()
-    Row(
-        modifier =
-            modifier
-                .height(s.dp(22))
-                .clip(RoundedCornerShape(50))
-                .background(WatchColors.Surface)
-                .padding(horizontal = s.dp(10)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(s.dp(7)).clip(CircleShape).background(WatchColors.Success))
-        Text(
-            text = "  이동중",
-            color = Color.White,
-            fontSize = s.sp(12),
-            fontWeight = FontWeight.Bold,
-        )
     }
 }

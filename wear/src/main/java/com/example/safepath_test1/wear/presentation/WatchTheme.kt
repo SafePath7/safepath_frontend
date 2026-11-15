@@ -51,6 +51,12 @@ internal object WatchColors {
 /** 명세가 기준으로 삼은 원형 화면 크기(dp). 실제 워치는 이보다 작아서 배율로 줄여 쓴다. */
 internal const val WATCH_DESIGN_SIZE = 384f
 
+private const val SOS_BOTTOM_MARGIN = 22
+private const val SOS_HEIGHT = 44
+private const val SOS_WIDTH = 92
+private val SOS_MIN_HEIGHT = 28.dp
+private val SOS_MIN_WIDTH = 56.dp
+
 /**
  * 명세의 숫자(좌표, 크기, 글자)를 실제 화면에 맞게 바꿔 주는 배율.
  * 길이는 화면 폭에 정비례로 줄이고, 글자는 그대로 비례하면 너무 작아지므로 제곱근 배율을 쓴다.
@@ -66,8 +72,18 @@ internal class WatchScale(val factor: Float) {
 
     fun sp(designPx: Int): TextUnit = sp(designPx.toFloat())
 
-    /** 화면 아래에서 SOS 버튼이 차지하는 높이(바닥 여백 22 + 버튼 44). 그 위로 글자를 올릴 때 쓴다. */
-    fun sosReservedHeight(): Dp = dp(22) + maxOf(dp(44), 28.dp)
+    /** 명세 크기를 줄이되 [min]보다는 작아지지 않게 한다. 눌러야 하는 버튼이 너무 작아지는 걸 막는다. */
+    fun dpAtLeast(designPx: Int, min: Dp): Dp = maxOf(dp(designPx), min)
+
+    // SOS 버튼(명세 384 기준: 바닥 여백 22, 높이 44, 폭 92). 줄어든 크기가 너무 작아지지 않게 최소 크기를 둔다.
+    fun sosBottomMargin(): Dp = dp(SOS_BOTTOM_MARGIN)
+
+    fun sosHeight(): Dp = dpAtLeast(SOS_HEIGHT, SOS_MIN_HEIGHT)
+
+    fun sosWidth(): Dp = dpAtLeast(SOS_WIDTH, SOS_MIN_WIDTH)
+
+    /** 화면 아래에서 SOS 버튼이 차지하는 높이(바닥 여백 + 버튼). 그 위로 글자를 올릴 때 쓴다. */
+    fun sosReservedHeight(): Dp = sosBottomMargin() + sosHeight()
 }
 
 @Composable
@@ -144,11 +160,11 @@ internal fun WatchClock(modifier: Modifier = Modifier) {
 @Composable
 internal fun WatchSosButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val s = rememberWatchScale()
-    val height = maxOf(s.dp(44), 28.dp)
+    val height = s.sosHeight()
     Box(
         modifier =
             modifier
-                .size(width = maxOf(s.dp(92), 56.dp), height = height)
+                .size(width = s.sosWidth(), height = height)
                 .clip(RoundedCornerShape(height / 2))
                 .background(WatchColors.Danger)
                 .clickable(onClick = onClick),
