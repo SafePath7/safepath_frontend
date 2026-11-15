@@ -60,6 +60,7 @@ internal object MapKeys {
     const val CENTER_LNG = "centerLng"
     const val ZOOM = "zoom"
     const val IMAGE_PX = "imagePx"
+    const val UPDATED_AT = "updatedAt"
 }
 
 /** [DataLayerPaths.RELEASE] DataMap 키. */

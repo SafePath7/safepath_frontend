@@ -2,6 +2,7 @@ package com.example.safepath_test1.wear.presentation
 
 import com.example.safepath_test1.wear.geo.LatLng
 import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.geo.RouteStep
 
 /** 남은 거리가 이 값(m) 아래면 도착한 것으로 본다. */
 internal const val ARRIVED_METERS = 20.0

@@ -1,27 +1,17 @@
 package com.example.safepath_test1.wear.presentation
 
-import android.content.Context
-import android.graphics.BitmapFactory
-import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import com.example.safepath_test1.wear.comm.MapKeys
+import com.example.safepath_test1.wear.comm.MapImage
 import com.example.safepath_test1.wear.geo.EARTH_CIRCUMFERENCE_M
 import com.example.safepath_test1.wear.geo.LatLng
 import com.example.safepath_test1.wear.geo.mercatorX
 import com.example.safepath_test1.wear.geo.mercatorY
-import com.google.android.gms.tasks.Tasks
-import com.google.android.gms.wearable.DataMap
-import com.google.android.gms.wearable.Wearable
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
-private const val TAG = "MapBackground"
 
 /** Mapbox 지도는 줌 0에서 세계 전체 폭이 512px이고, 줌이 1 오를 때마다 2배가 된다. */
 private const val MAP_TILE_PX = 512.0
@@ -84,27 +74,10 @@ internal class MapProjection(
 /** 워치가 받은 지도 이미지와 그 위치 정보. */
 internal class MapBackground(val image: ImageBitmap, val projection: MapProjection)
 
-/** 폰이 보낸 DataMap에서 지도 이미지를 꺼내 디코딩한다. 실패하면 null이라 기존 스케치 지도를 그대로 쓴다. */
-internal suspend fun loadMapBackground(context: Context, dataMap: DataMap): MapBackground? =
-    withContext(Dispatchers.IO) {
-        try {
-            val asset = dataMap.getAsset(MapKeys.IMAGE) ?: return@withContext null
-            val response = Tasks.await(Wearable.getDataClient(context).getFdForAsset(asset))
-            val bitmap =
-                response.inputStream.use { BitmapFactory.decodeStream(it) }
-                    ?: return@withContext null
-            MapBackground(
-                image = bitmap.asImageBitmap(),
-                projection =
-                    MapProjection(
-                        centerLat = dataMap.getDouble(MapKeys.CENTER_LAT),
-                        centerLng = dataMap.getDouble(MapKeys.CENTER_LNG),
-                        zoom = dataMap.getDouble(MapKeys.ZOOM),
-                        imagePx = dataMap.getInt(MapKeys.IMAGE_PX),
-                    ),
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load map image", e)
-            null
-        }
-    }
+/** 폰이 보낸 지도 이미지를 화면에 쓸 배경(이미지 + 좌표 변환)으로 바꾼다. */
+internal fun MapImage.toBackground(): MapBackground =
+    MapBackground(
+        image = bitmap.asImageBitmap(),
+        projection =
+            MapProjection(centerLat = centerLat, centerLng = centerLng, zoom = zoom, imagePx = imagePx),
+    )

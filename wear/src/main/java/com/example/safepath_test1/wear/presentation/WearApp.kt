@@ -2,7 +2,6 @@ package com.example.safepath_test1.wear.presentation
 
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -43,76 +42,28 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import com.example.safepath_test1.wear.comm.DataLayerPaths
-import com.example.safepath_test1.wear.comm.ReleaseKeys
-import com.example.safepath_test1.wear.comm.StatusKeys
-import com.example.safepath_test1.wear.comm.StatusStates
-import com.example.safepath_test1.wear.geo.LatLng
-import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.comm.WatchDataReceiver
 import com.example.safepath_test1.wear.state.AlertStage
 import com.example.safepath_test1.wear.state.AlertState
 import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
+import com.example.safepath_test1.wear.state.RouteMapState
+import com.example.safepath_test1.wear.state.RouteStatus
+import com.example.safepath_test1.wear.state.isStatusStale
+import com.example.safepath_test1.wear.state.statusOrStale
 import com.example.safepath_test1.wear.sensors.WatchMotionSender
 import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchSosSender
 import com.example.safepath_test1.wear.sensors.WatchVoiceRecorder
 import com.example.safepath_test1.wear.sensors.WatchVoiceSender
-import com.google.android.gms.wearable.DataClient
-import com.google.android.gms.wearable.DataEvent
-import com.google.android.gms.wearable.DataMapItem
-import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 private const val TAG = "WearApp"
 
-/** If no update has arrived from the phone in this long, treat it as stale/disconnected. */
-internal const val STALE_AFTER_MS = 10 * 60 * 1000L
-
-internal fun isStatusStale(updatedAt: Long, now: Long = System.currentTimeMillis()): Boolean =
-    updatedAt <= 0L || now - updatedAt > STALE_AFTER_MS
-
-private sealed class RouteStatus {
-    data object Idle : RouteStatus()
-
-    data object Searching : RouteStatus()
-
-    data class Found(val routeType: String, val distanceKm: String, val destinationName: String?) :
-        RouteStatus()
-
-    data object Stale : RouteStatus()
-}
-
-/** Route shape + live position for RouteMiniMap, decoded from WearMessenger's DataMap fields. */
-private data class RouteMapState(
-    val points: List<LatLng>,
-    val destination: LatLng?,
-    val current: LatLng?,
-    /** 폰이 길찾기 서비스에서 받아 보낸 회전 안내. 아직 안 보내는 폰이면 비어 있다. */
-    val steps: List<RouteStep> = emptyList(),
-) {
-    /** 누적 거리를 한 번만 계산해 둔 경로. 수신할 때마다 새로 만들고, 프레임마다 다시 계산하지 않는다. */
-    val path: RoutePath = RoutePath(points)
-}
-
-/** Reverses WearMessenger's "lat,lng;lat,lng;..." encoding. */
-private fun decodeLatLngList(encoded: String?): List<LatLng> {
-    if (encoded.isNullOrBlank()) return emptyList()
-    return encoded.split(";").mapNotNull { pair ->
-        val parts = pair.split(",")
-        if (parts.size != 2) return@mapNotNull null
-        val lat = parts[0].toDoubleOrNull() ?: return@mapNotNull null
-        val lng = parts[1].toDoubleOrNull() ?: return@mapNotNull null
-        lat to lng
-    }
-}
-
 /**
- * Experimental counterpart to WearApp.kt: syncs status over the Wearable Data Layer's DataClient
- * instead of Firebase. Uses DataClient (not MessageClient) — see WearMessenger.kt on the phone side
- * for why. No pairing code screen here - Bluetooth pairing between this watch and a phone already
- * scopes who can push data to it.
+ * 워치 앱의 최상위 화면. 폰이 Wearable Data Layer(DataClient)로 보내는 길안내 상태·경로·지도 이미지·해제 신호를
+ * 받아 보여 주고, 워치의 센서와 마이크 값을 폰으로 보낸다. MessageClient가 아니라 DataClient를 쓰는 이유는
+ * 폰 쪽 WearMessenger.kt를 본다. 블루투스로 이미 짝지어진 폰만 값을 보낼 수 있어서 별도 페어링 화면은 없다.
  */
 @Composable
 fun WearApp() {
@@ -149,99 +100,29 @@ fun WearApp() {
     }
     DisposableEffect(Unit) { onDispose { voiceRecorder.stop() } }
 
-    fun applyDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
-        val updatedAt = dataMap.getLong(StatusKeys.UPDATED_AT)
-        lastReceivedAt = updatedAt
-        val receivedStatus =
-            when (dataMap.getString(StatusKeys.STATE)) {
-                StatusStates.SEARCHING -> RouteStatus.Searching
-                StatusStates.FOUND ->
-                    RouteStatus.Found(
-                        routeType = dataMap.getString(StatusKeys.ROUTE_TYPE) ?: "경로",
-                        distanceKm = "%.1f".format(dataMap.getDouble(StatusKeys.DISTANCE_METERS) / 1000.0),
-                        destinationName = dataMap.getString(StatusKeys.DESTINATION_NAME),
-                    )
-                else -> RouteStatus.Idle
-            }
-        status = if (isStatusStale(updatedAt)) RouteStatus.Stale else receivedStatus
-
-        val points = decodeLatLngList(dataMap.getString(StatusKeys.ROUTE_POINTS))
-        val destination =
-            if (dataMap.containsKey(StatusKeys.DEST_LAT) && dataMap.containsKey(StatusKeys.DEST_LNG)) {
-                dataMap.getDouble(StatusKeys.DEST_LAT) to dataMap.getDouble(StatusKeys.DEST_LNG)
-            } else {
-                null
-            }
-        val current =
-            if (dataMap.containsKey(StatusKeys.CUR_LAT) && dataMap.containsKey(StatusKeys.CUR_LNG)) {
-                dataMap.getDouble(StatusKeys.CUR_LAT) to dataMap.getDouble(StatusKeys.CUR_LNG)
-            } else {
-                null
-            }
-        val steps = decodeRouteSteps(dataMap.getString(StatusKeys.ROUTE_STEPS))
-        routeMap = if (points.size >= 2) RouteMapState(points, destination, current, steps) else null
-
-        Log.i(TAG, "New status=$status")
-    }
-
-    // 폰이 보낸 지도 이미지를 디코딩해서 미니맵 배경으로 쓴다. 실패하면 기존 값(또는 스케치 지도)을 그대로 둔다.
-    fun applyMapDataMap(dataMap: com.google.android.gms.wearable.DataMap) {
-        scope.launch { loadMapBackground(context, dataMap)?.let { mapBackground = it } }
-    }
-
-    // Pick up whatever state is already there (registering the listener below
-    // only delivers *future* changes, not the item as it stood before we
-    // started listening).
+    // 폰이 보내는 값(상태, 지도 이미지, 해제 신호)을 받는다. 받는 방법과 순서 규칙은 WatchDataReceiver에 있다.
     DisposableEffect(Unit) {
-        Wearable.getDataClient(context)
-            .dataItems
-            .addOnSuccessListener { dataItems ->
-                for (i in 0 until dataItems.count) {
-                    val item = dataItems[i]
-                    when (item.uri.path) {
-                        DataLayerPaths.STATUS -> applyDataMap(DataMapItem.fromDataItem(item).dataMap)
-                        DataLayerPaths.MAP -> applyMapDataMap(DataMapItem.fromDataItem(item).dataMap)
-                    }
-                }
-                dataItems.release()
-            }
-            .addOnFailureListener { e -> Log.e(TAG, "Failed to read existing DataItems", e) }
-        onDispose {}
-    }
-
-    DisposableEffect(Unit) {
-        val dataClient = Wearable.getDataClient(context)
-        val listener = DataClient.OnDataChangedListener { dataEvents ->
-            for (event in dataEvents) {
-                Log.i(TAG, "DataEvent type=${event.type} path=${event.dataItem.uri.path}")
-                if (event.type == DataEvent.TYPE_CHANGED) {
-                    when (event.dataItem.uri.path) {
-                        DataLayerPaths.STATUS -> applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
-                        DataLayerPaths.MAP -> applyMapDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
-                        DataLayerPaths.RELEASE ->
-                            releaseSignalAt =
-                                DataMapItem.fromDataItem(event.dataItem).dataMap.getLong(ReleaseKeys.UPDATED_AT)
-                    }
-                }
-            }
-            dataEvents.release()
-        }
-        dataClient.addListener(listener)
-        Log.i(TAG, "Registered DataClient listener")
-        onDispose {
-            dataClient.removeListener(listener)
-            Log.i(TAG, "Removed DataClient listener")
-        }
+        val receiver =
+            WatchDataReceiver(
+                context = context,
+                scope = scope,
+                onStatus = { update ->
+                    lastReceivedAt = update.updatedAt
+                    status = statusOrStale(update.status, update.updatedAt)
+                    routeMap = update.routeMap
+                    Log.i(TAG, "New status=$status")
+                },
+                onMapImage = { image -> mapBackground = image.toBackground() },
+                onRelease = { updatedAt -> releaseSignalAt = updatedAt },
+            )
+        receiver.start()
+        onDispose { receiver.stop() }
     }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000)
-            if (
-                lastReceivedAt > 0 &&
-                    System.currentTimeMillis() - lastReceivedAt > STALE_AFTER_MS &&
-                    status !is RouteStatus.Stale
-            ) {
+            if (lastReceivedAt > 0 && isStatusStale(lastReceivedAt) && status !is RouteStatus.Stale) {
                 status = RouteStatus.Stale
             }
         }

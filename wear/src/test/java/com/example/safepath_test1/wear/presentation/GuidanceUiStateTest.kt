@@ -1,6 +1,7 @@
 package com.example.safepath_test1.wear.presentation
 
 import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.geo.RouteStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

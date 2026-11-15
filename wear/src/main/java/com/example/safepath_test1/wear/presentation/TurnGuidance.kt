@@ -2,6 +2,7 @@ package com.example.safepath_test1.wear.presentation
 
 import com.example.safepath_test1.wear.geo.LatLng
 import com.example.safepath_test1.wear.geo.RoutePath
+import com.example.safepath_test1.wear.geo.RouteStep
 import com.example.safepath_test1.wear.geo.turnAngleDegrees
 import kotlin.math.abs
 
@@ -12,25 +13,6 @@ internal enum class TurnDirection {
     SlightRight,
     UTurn,
     Straight,
-}
-
-/**
- * 폰이 길찾기 서비스(Mapbox Directions)에서 받아 보낸 회전 안내 한 단계.
- * [type]과 [modifier]는 Mapbox의 maneuver.type("turn", "depart", "arrive" ...)과
- * maneuver.modifier("left", "slight right", "uturn", "straight" ...) 값 그대로다.
- */
-internal data class RouteStep(val point: LatLng, val type: String, val modifier: String)
-
-/** 폰 WearMessenger의 "lat,lng,type,modifier;..." 형식을 되돌린다. 형식이 틀린 항목은 버린다. */
-internal fun decodeRouteSteps(encoded: String?): List<RouteStep> {
-    if (encoded.isNullOrBlank()) return emptyList()
-    return encoded.split(";").mapNotNull { item ->
-        val parts = item.split(",", limit = 4)
-        if (parts.size < 3) return@mapNotNull null
-        val lat = parts[0].toDoubleOrNull() ?: return@mapNotNull null
-        val lng = parts[1].toDoubleOrNull() ?: return@mapNotNull null
-        RouteStep(lat to lng, parts[2].trim(), parts.getOrElse(3) { "" }.trim())
-    }
 }
 
 /** 이 단계가 화면에 알릴 회전이면 그 방향, 직진·출발처럼 알릴 게 없으면 null. */

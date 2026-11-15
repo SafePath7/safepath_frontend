@@ -55,8 +55,11 @@ class DataLayerContractTest {
     @Test
     fun mapAndReleaseKeys_matchPhone() {
         assertEquals(
-            listOf("image", "centerLat", "centerLng", "zoom", "imagePx"),
-            listOf(MapKeys.IMAGE, MapKeys.CENTER_LAT, MapKeys.CENTER_LNG, MapKeys.ZOOM, MapKeys.IMAGE_PX),
+            listOf("image", "centerLat", "centerLng", "zoom", "imagePx", "updatedAt"),
+            listOf(
+                MapKeys.IMAGE, MapKeys.CENTER_LAT, MapKeys.CENTER_LNG, MapKeys.ZOOM, MapKeys.IMAGE_PX,
+                MapKeys.UPDATED_AT,
+            ),
         )
         assertEquals("updatedAt", ReleaseKeys.UPDATED_AT)
     }

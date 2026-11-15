@@ -1,5 +1,7 @@
 package com.example.safepath_test1.wear.presentation
 
+import com.example.safepath_test1.wear.state.STALE_AFTER_MS
+import com.example.safepath_test1.wear.state.isStatusStale
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
