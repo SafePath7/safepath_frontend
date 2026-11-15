@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -54,6 +55,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.example.safepath_test1.api.AccountRepository
 import com.example.safepath_test1.api.accountErrorMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun SafePathApp() {
@@ -68,6 +71,7 @@ fun SafePathApp() {
         if (missing.isNotEmpty()) startupPermissions.launch(missing.toTypedArray())
     }
     val auth = remember { FirebaseAuth.getInstance() }
+    val appScope = rememberCoroutineScope()
     var firebaseUser by remember { mutableStateOf(auth.currentUser) }
 
     DisposableEffect(auth) {
@@ -84,6 +88,15 @@ fun SafePathApp() {
     var retry by remember { mutableIntStateOf(0) }
     var membership by remember(firebaseUser?.uid) { mutableStateOf("checking") }
     var membershipError by remember(firebaseUser?.uid) { mutableStateOf<String?>(null) }
+    LaunchedEffect(firebaseUser?.uid, membership) {
+        if (firebaseUser != null && membership == "registered") {
+            try {
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                com.example.safepath_test1.api.BackendRepository(context).registerToken(token)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { Log.w("SafePathFCM", "Token registration failed", e) }
+        }
+    }
     LaunchedEffect(firebaseUser?.uid, profileVersion, retry) {
         val uid = firebaseUser?.uid ?: return@LaunchedEffect
         membership = "checking"
@@ -113,7 +126,14 @@ fun SafePathApp() {
         } else if (membership == "signup") {
             SignupScreen(onComplete = { profileVersion++ }, onBack = { auth.signOut() })
         } else if (membership == "registered") {
-            SafePathMain(onLogout = { auth.signOut() }, permissionRevision = permissionRevision)
+            SafePathMain(onLogout = {
+                appScope.launch {
+                    try { com.google.firebase.messaging.FirebaseMessaging.getInstance().deleteToken().await() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Log.w("SafePathFCM", "Could not invalidate token on logout", e) }
+                    auth.signOut()
+                }
+            }, permissionRevision = permissionRevision)
         } else {
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -134,6 +154,8 @@ fun SafePathApp() {
 @Composable
 private fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var sosPending by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -261,12 +283,7 @@ private fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                     modifier = Modifier.fillMaxSize(),
                 )
             SafePathTab.Friends ->
-                FriendsScreen(
-                    onInviteCreated = { invite ->
-                        preparedInvite = invite
-                        shareError =
-                            com.example.safepath_test1.friends.shareFriendInvite(context, invite)
-                    },
+                com.example.safepath_test1.ui.guardian.BackendGuardianScreen(
                     modifier = Modifier.padding(bottom = 100.dp),
                 )
             SafePathTab.Guardian -> GuardianScreen(modifier = Modifier.padding(bottom = 100.dp))
@@ -340,30 +357,31 @@ private fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
         if (showSosConfirmation) {
             AlertDialog(
                 onDismissRequest = { showSosConfirmation = false },
-                title = { Text("긴급 위치를 공유할까요?") },
+                title = { Text("보호자에게 SOS를 보낼까요?") },
                 text = {
-                    Text(
-                        if (currentLocation == null) {
-                            "현재 위치를 아직 확인하지 못했습니다. 위치가 확인된 뒤 다시 시도해 주세요."
-                        } else {
-                            "공유할 앱과 대상을 다음 화면에서 직접 선택합니다. SafePath가 자동으로 신고하거나 문자를 보내지는 않습니다."
-                        }
-                    )
+                    Text("수락된 보호자에게 서버 알림을 요청합니다. 현재 서버 알림에는 위치가 포함되지 않으며 자동 신고는 되지 않습니다.")
                 },
                 confirmButton = {
                     Button(
-                        enabled = currentLocation != null,
+                        enabled = !sosPending,
                         onClick = {
-                            if (shareLocation(context, currentLocation, isEmergency = true)) {
-                                showSosConfirmation = false
+                            sosPending = true
+                            scope.launch {
+                                try {
+                                    val result = com.example.safepath_test1.api.BackendRepository(context).sos()
+                                    android.widget.Toast.makeText(context, "SOS 알림 서버 발송 성공 ${result.successCount}건, 실패 ${result.failureCount}건", android.widget.Toast.LENGTH_LONG).show()
+                                    showSosConfirmation = false
+                                } catch (e: CancellationException) { throw e }
+                                catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
+                                finally { sosPending = false }
                             }
                         },
                     ) {
-                        Text("공유 화면 열기")
+                        Text("SOS 전송")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showSosConfirmation = false }) { Text("취소") }
+                    TextButton(onClick = { if (!sosPending) showSosConfirmation = false }) { Text("취소") }
                 },
             )
         }

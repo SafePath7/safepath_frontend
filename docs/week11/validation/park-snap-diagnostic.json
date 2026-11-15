@@ -1,0 +1,10 @@
+{
+  "case": "daegu_park",
+  "diagnostic_only": true,
+  "code": "Ok",
+  "snap_distances_m": [
+    138.076,
+    42.425
+  ],
+  "note": "Unlimited snap diagnostic only. App limits remain 75m endpoint / 40m via."
+}

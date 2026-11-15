@@ -1,0 +1,666 @@
+{
+  "cases": 12,
+  "notes": "Public coordinate integration checks, not a field safety audit. No tokens or user GPS saved.",
+  "checked_at_utc": "2026-11-13T15:11:54.810615900Z",
+  "successes": 11,
+  "quality_violations": [],
+  "success_rate": 0.9166666666666666,
+  "warm_first_case": {
+    "elapsed_ms": 60,
+    "cache_hits": 0
+  },
+  "results": [
+    {
+      "origin": [
+        37.5663,
+        126.9781
+      ],
+      "destination": [
+        37.5657,
+        126.9752
+      ],
+      "requests": 4,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 16.801313971704147,
+        "longest_gap_m": 171.80157718470636,
+        "seconds": 502.052,
+        "covered_ratio": 0.43220820507051155,
+        "uncovered_m": 340.95833782831056,
+        "warnings": [],
+        "max_snap_m": 13.903836325216071,
+        "repeat_m": 0,
+        "meters": 600.521
+      },
+      "baseline_seconds": 502.052,
+      "success": true,
+      "elapsed_ms": 472,
+      "safe": {
+        "closed_loops": 0,
+        "score": 16.801313971704147,
+        "longest_gap_m": 171.80157718470636,
+        "seconds": 502.052,
+        "covered_ratio": 0.43220820507051155,
+        "uncovered_m": 340.95833782831056,
+        "warnings": [],
+        "max_snap_m": 13.903836325216071,
+        "repeat_m": 0,
+        "meters": 600.521
+      },
+      "baseline_repeat_m": 0,
+      "case": "seoul_cityhall_palace",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 16.801313971704147,
+        "longest_gap_m": 171.80157718470636,
+        "seconds": 502.052,
+        "covered_ratio": 0.43220820507051155,
+        "uncovered_m": 340.95833782831056,
+        "warnings": [],
+        "max_snap_m": 13.903836325216071,
+        "repeat_m": 0,
+        "meters": 600.521
+      }
+    },
+    {
+      "origin": [
+        37.569,
+        126.9784
+      ],
+      "destination": [
+        37.5697,
+        126.9876
+      ],
+      "requests": 3,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 51.61861577643562,
+        "longest_gap_m": 39.96869758888975,
+        "seconds": 727.976,
+        "covered_ratio": 0.9031925684999254,
+        "uncovered_m": 97.49600456699886,
+        "warnings": [],
+        "max_snap_m": 8.339619498618752,
+        "repeat_m": 0,
+        "meters": 1007.11
+      },
+      "baseline_seconds": 681.107,
+      "success": true,
+      "elapsed_ms": 87,
+      "safe": {
+        "closed_loops": 0,
+        "score": 51.61861577643562,
+        "longest_gap_m": 39.96869758888975,
+        "seconds": 727.976,
+        "covered_ratio": 0.9031925684999254,
+        "uncovered_m": 97.49600456699886,
+        "warnings": [],
+        "max_snap_m": 8.339619498618752,
+        "repeat_m": 0,
+        "meters": 1007.11
+      },
+      "baseline_repeat_m": 0,
+      "case": "seoul_stream",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 39.31366682338029,
+        "longest_gap_m": 90.54996396900215,
+        "seconds": 681.107,
+        "covered_ratio": 0.7961658439926638,
+        "uncovered_m": 187.5347182021111,
+        "warnings": [],
+        "max_snap_m": 4.256617402315232,
+        "repeat_m": 0,
+        "meters": 920.032
+      }
+    },
+    {
+      "origin": [
+        37.5565,
+        126.9722
+      ],
+      "destination": [
+        37.559,
+        126.977
+      ],
+      "requests": 4,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 37.34566066468301,
+        "longest_gap_m": 103.84055701167063,
+        "seconds": 636.174,
+        "covered_ratio": 0.7788416059654951,
+        "uncovered_m": 193.08369526507522,
+        "warnings": [],
+        "max_snap_m": 9.458143098779573,
+        "repeat_m": 0,
+        "meters": 873.066
+      },
+      "baseline_seconds": 660.454,
+      "success": true,
+      "elapsed_ms": 68,
+      "safe": {
+        "closed_loops": 0,
+        "score": 37.34566066468301,
+        "longest_gap_m": 103.84055701167063,
+        "seconds": 636.174,
+        "covered_ratio": 0.7788416059654951,
+        "uncovered_m": 193.08369526507522,
+        "warnings": [],
+        "max_snap_m": 9.458143098779573,
+        "repeat_m": 0,
+        "meters": 873.066
+      },
+      "baseline_repeat_m": 0,
+      "case": "seoul_station_market",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 37.34566066468301,
+        "longest_gap_m": 103.84055701167063,
+        "seconds": 636.174,
+        "covered_ratio": 0.7788416059654951,
+        "uncovered_m": 193.08369526507522,
+        "warnings": [],
+        "max_snap_m": 9.458143098779573,
+        "repeat_m": 0,
+        "meters": 873.066
+      }
+    },
+    {
+      "origin": [
+        37.5092,
+        126.9953
+      ],
+      "destination": [
+        37.5191,
+        126.995
+      ],
+      "requests": 3,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 0.245169990795698,
+        "longest_gap_m": 802.5521134375454,
+        "seconds": 954.353,
+        "covered_ratio": 0.03612074668995523,
+        "uncovered_m": 1308.3972678070966,
+        "warnings": [
+          "시설 자료 부족",
+          "일부 대안 경로 미확인"
+        ],
+        "max_snap_m": 10.052793796552427,
+        "repeat_m": 0,
+        "meters": 1357.401
+      },
+      "baseline_seconds": 954.353,
+      "success": true,
+      "elapsed_ms": 82,
+      "safe": {
+        "closed_loops": 0,
+        "score": 0.245169990795698,
+        "longest_gap_m": 802.5521134375454,
+        "seconds": 954.353,
+        "covered_ratio": 0.03612074668995523,
+        "uncovered_m": 1308.3972678070966,
+        "warnings": [
+          "시설 자료 부족",
+          "일부 대안 경로 미확인"
+        ],
+        "max_snap_m": 10.052793796552427,
+        "repeat_m": 0,
+        "meters": 1357.401
+      },
+      "baseline_repeat_m": 0,
+      "case": "seoul_bridge",
+      "problems": ["NoSegment"],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 0.245169990795698,
+        "longest_gap_m": 802.5521134375454,
+        "seconds": 954.353,
+        "covered_ratio": 0.03612074668995523,
+        "uncovered_m": 1308.3972678070966,
+        "warnings": [
+          "시설 자료 부족",
+          "일부 대안 경로 미확인"
+        ],
+        "max_snap_m": 10.052793796552427,
+        "repeat_m": 0,
+        "meters": 1357.401
+      }
+    },
+    {
+      "origin": [
+        37.5266,
+        126.9243
+      ],
+      "destination": [
+        37.5295,
+        126.9327
+      ],
+      "requests": 3,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 1181.9149950151823,
+        "seconds": 808.376,
+        "covered_ratio": 0,
+        "uncovered_m": 1181.9149950151823,
+        "warnings": ["시설 자료 부족"],
+        "max_snap_m": 4.217168974801995,
+        "repeat_m": 0,
+        "meters": 1181.946
+      },
+      "baseline_seconds": 808.376,
+      "success": true,
+      "elapsed_ms": 77,
+      "safe": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 1181.9149950151823,
+        "seconds": 808.376,
+        "covered_ratio": 0,
+        "uncovered_m": 1181.9149950151823,
+        "warnings": ["시설 자료 부족"],
+        "max_snap_m": 4.217168974801995,
+        "repeat_m": 0,
+        "meters": 1181.946
+      },
+      "baseline_repeat_m": 0,
+      "case": "seoul_park_riverside",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 1181.9149950151823,
+        "seconds": 808.376,
+        "covered_ratio": 0,
+        "uncovered_m": 1181.9149950151823,
+        "warnings": ["시설 자료 부족"],
+        "max_snap_m": 4.217168974801995,
+        "repeat_m": 0,
+        "meters": 1181.946
+      }
+    },
+    {
+      "origin": [
+        35.8692,
+        128.594
+      ],
+      "destination": [
+        35.8666,
+        128.5933
+      ],
+      "requests": 2,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 42.681103299027626,
+        "longest_gap_m": 48.986819559423026,
+        "seconds": 257.811,
+        "covered_ratio": 0.7563408233989772,
+        "uncovered_m": 86.78834878602896,
+        "warnings": [],
+        "max_snap_m": 10.833824466088858,
+        "repeat_m": 0,
+        "meters": 356.179
+      },
+      "baseline_seconds": 257.811,
+      "success": true,
+      "elapsed_ms": 39,
+      "safe": {
+        "closed_loops": 0,
+        "score": 42.681103299027626,
+        "longest_gap_m": 48.986819559423026,
+        "seconds": 257.811,
+        "covered_ratio": 0.7563408233989772,
+        "uncovered_m": 86.78834878602896,
+        "warnings": [],
+        "max_snap_m": 10.833824466088858,
+        "repeat_m": 0,
+        "meters": 356.179
+      },
+      "baseline_repeat_m": 0,
+      "case": "daegu_downtown",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 42.681103299027626,
+        "longest_gap_m": 48.986819559423026,
+        "seconds": 257.811,
+        "covered_ratio": 0.7563408233989772,
+        "uncovered_m": 86.78834878602896,
+        "warnings": [],
+        "max_snap_m": 10.833824466088858,
+        "repeat_m": 0,
+        "meters": 356.179
+      }
+    },
+    {
+      "origin": [
+        35.8552,
+        128.4882
+      ],
+      "destination": [
+        35.8532,
+        128.493
+      ],
+      "requests": 4,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 5.539039435117498,
+        "longest_gap_m": 470.20330250309064,
+        "seconds": 428.972,
+        "covered_ratio": 0.27731392647392583,
+        "uncovered_m": 479.1089207848513,
+        "warnings": [],
+        "max_snap_m": 1.8958359775441997,
+        "repeat_m": 0,
+        "meters": 662.969
+      },
+      "baseline_seconds": 428.972,
+      "success": true,
+      "elapsed_ms": 97,
+      "safe": {
+        "closed_loops": 0,
+        "score": 5.539039435117498,
+        "longest_gap_m": 470.20330250309064,
+        "seconds": 428.972,
+        "covered_ratio": 0.27731392647392583,
+        "uncovered_m": 479.1089207848513,
+        "warnings": [],
+        "max_snap_m": 1.8958359775441997,
+        "repeat_m": 0,
+        "meters": 662.969
+      },
+      "baseline_repeat_m": 0,
+      "case": "daegu_campus",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 5.539039435117498,
+        "longest_gap_m": 470.20330250309064,
+        "seconds": 428.972,
+        "covered_ratio": 0.27731392647392583,
+        "uncovered_m": 479.1089207848513,
+        "warnings": [],
+        "max_snap_m": 1.8958359775441997,
+        "repeat_m": 0,
+        "meters": 662.969
+      }
+    },
+    {
+      "success": false,
+      "elapsed_ms": 14,
+      "origin": [
+        35.853,
+        128.5592
+      ],
+      "destination": [
+        35.8493,
+        128.5637
+      ],
+      "requests": 1,
+      "cache_hits": 0,
+      "error": "출발지나 목적지 근처의 보행 도로를 찾지 못했습니다. 지도에서 가까운 길을 선택해 주세요.",
+      "case": "daegu_park",
+      "timeout": false,
+      "problems": ["NoSegment"]
+    },
+    {
+      "origin": [
+        35.1577,
+        129.0592
+      ],
+      "destination": [
+        35.1537,
+        129.0594
+      ],
+      "requests": 3,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 5.467602459428596,
+        "longest_gap_m": 341.44385725867454,
+        "seconds": 329.644,
+        "covered_ratio": 0.20003497397040526,
+        "uncovered_m": 366.79256878665467,
+        "warnings": [],
+        "max_snap_m": 9.81935601386605,
+        "repeat_m": 0,
+        "meters": 458.506
+      },
+      "baseline_seconds": 329.644,
+      "success": true,
+      "elapsed_ms": 53,
+      "safe": {
+        "closed_loops": 0,
+        "score": 10.534259804670707,
+        "longest_gap_m": 348.7148061747457,
+        "seconds": 515.316,
+        "covered_ratio": 0.40182972403232853,
+        "uncovered_m": 421.19604239139005,
+        "warnings": [],
+        "max_snap_m": 13.115429797020044,
+        "repeat_m": 0,
+        "meters": 704.139
+      },
+      "baseline_repeat_m": 0,
+      "case": "busan_downtown",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 5.467602459428596,
+        "longest_gap_m": 341.44385725867454,
+        "seconds": 329.644,
+        "covered_ratio": 0.20003497397040526,
+        "uncovered_m": 366.79256878665467,
+        "warnings": [],
+        "max_snap_m": 9.81935601386605,
+        "repeat_m": 0,
+        "meters": 458.506
+      }
+    },
+    {
+      "origin": [
+        35.1498,
+        126.9192
+      ],
+      "destination": [
+        35.1466,
+        126.9222
+      ],
+      "requests": 2,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 672.7470289497362,
+        "seconds": 471.84,
+        "covered_ratio": 0,
+        "uncovered_m": 672.7470289497362,
+        "warnings": [
+          "시설 자료 부족",
+          "도착 보행로 연결 약 17m"
+        ],
+        "max_snap_m": 16.18450978363803,
+        "repeat_m": 0,
+        "meters": 672.734
+      },
+      "baseline_seconds": 471.84,
+      "success": true,
+      "elapsed_ms": 54,
+      "safe": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 672.7470289497362,
+        "seconds": 471.84,
+        "covered_ratio": 0,
+        "uncovered_m": 672.7470289497362,
+        "warnings": [
+          "시설 자료 부족",
+          "도착 보행로 연결 약 17m"
+        ],
+        "max_snap_m": 16.18450978363803,
+        "repeat_m": 0,
+        "meters": 672.734
+      },
+      "baseline_repeat_m": 0,
+      "case": "gwangju_downtown",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 0,
+        "longest_gap_m": 672.7470289497362,
+        "seconds": 471.84,
+        "covered_ratio": 0,
+        "uncovered_m": 672.7470289497362,
+        "warnings": [
+          "시설 자료 부족",
+          "도착 보행로 연결 약 17m"
+        ],
+        "max_snap_m": 16.18450978363803,
+        "repeat_m": 0,
+        "meters": 672.734
+      }
+    },
+    {
+      "origin": [
+        36.3322,
+        127.431
+      ],
+      "destination": [
+        36.3282,
+        127.4272
+      ],
+      "requests": 2,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 40.98756742275367,
+        "longest_gap_m": 80.64417901533075,
+        "seconds": 606.918,
+        "covered_ratio": 0.8046262175984392,
+        "uncovered_m": 164.90537875143264,
+        "warnings": [],
+        "max_snap_m": 13.84335042919774,
+        "repeat_m": 0,
+        "meters": 844.12
+      },
+      "baseline_seconds": 578.115,
+      "success": true,
+      "elapsed_ms": 42,
+      "safe": {
+        "closed_loops": 0,
+        "score": 40.98756742275367,
+        "longest_gap_m": 80.64417901533075,
+        "seconds": 606.918,
+        "covered_ratio": 0.8046262175984392,
+        "uncovered_m": 164.90537875143264,
+        "warnings": [],
+        "max_snap_m": 13.84335042919774,
+        "repeat_m": 0,
+        "meters": 844.12
+      },
+      "baseline_repeat_m": 0,
+      "case": "daejeon_market",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 36.373163096866044,
+        "longest_gap_m": 82.6424211782076,
+        "seconds": 578.115,
+        "covered_ratio": 0.7341189433831011,
+        "uncovered_m": 212.3739741755221,
+        "warnings": [],
+        "max_snap_m": 12.473935864640831,
+        "repeat_m": 0,
+        "meters": 798.777
+      }
+    },
+    {
+      "origin": [
+        33.5113,
+        126.5244
+      ],
+      "destination": [
+        33.513,
+        126.529
+      ],
+      "requests": 4,
+      "cache_hits": 0,
+      "error": null,
+      "timeout": false,
+      "recommended": {
+        "closed_loops": 0,
+        "score": 8.89254725488867,
+        "longest_gap_m": 271.28010585719306,
+        "seconds": 385.164,
+        "covered_ratio": 0.2846157225796387,
+        "uncovered_m": 379.99633793730305,
+        "warnings": [],
+        "max_snap_m": 4.7156107710090955,
+        "repeat_m": 0,
+        "meters": 531.173
+      },
+      "baseline_seconds": 385.164,
+      "success": true,
+      "elapsed_ms": 71,
+      "safe": {
+        "closed_loops": 0,
+        "score": 19.393457261811253,
+        "longest_gap_m": 110.84060989793346,
+        "seconds": 665.444,
+        "covered_ratio": 0.4734261499164917,
+        "uncovered_m": 480.02190110786535,
+        "warnings": [],
+        "max_snap_m": 20.898059367618917,
+        "repeat_m": 0,
+        "meters": 911.581
+      },
+      "baseline_repeat_m": 0,
+      "case": "jeju_downtown",
+      "problems": [],
+      "shortest": {
+        "closed_loops": 0,
+        "score": 8.89254725488867,
+        "longest_gap_m": 271.28010585719306,
+        "seconds": 385.164,
+        "covered_ratio": 0.2846157225796387,
+        "uncovered_m": 379.99633793730305,
+        "warnings": [],
+        "max_snap_m": 4.7156107710090955,
+        "repeat_m": 0,
+        "meters": 531.173
+      }
+    }
+  ]
+}

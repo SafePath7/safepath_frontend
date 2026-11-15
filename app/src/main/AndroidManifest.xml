@@ -22,6 +22,10 @@
     android:theme="@style/Theme.Safepathtest1"
   >
 
+        <service android:name=".api.SafePathMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+
         <meta-data
       android:name="com.kakao.sdk.AppKey"
       android:value="@string/kakao_native_app_key"

@@ -1,0 +1,14 @@
+{
+  "전국 CCTV 좌표.csv": {
+    "rows": 377278,
+    "valid_unique_coordinates": 251987,
+    "invalid": 21,
+    "duplicates": 125270
+  },
+  "전국 가로등 좌표.csv": {
+    "rows": 50000,
+    "valid_unique_coordinates": 28652,
+    "invalid": 17642,
+    "duplicates": 3706
+  }
+}

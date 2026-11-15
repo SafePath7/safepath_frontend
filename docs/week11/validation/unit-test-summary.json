@@ -1,0 +1,93 @@
+{
+  "tests": 66,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 1,
+  "checked_at": "2026-11-14T00:11:43.737336",
+  "suites": [
+    {
+      "name": "com.example.safepath_test1.ExampleUnitTest",
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.friends.FriendInviteTest",
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.FacilityRoutePlannerTest",
+      "tests": 4,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.LiveRouteValidationTest",
+      "tests": 1,
+      "failures": 0,
+      "skipped": 1
+    },
+    {
+      "name": "com.example.safepath_test1.location.MultiRouteResultTest",
+      "tests": 5,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.NavigationRepositoryTest",
+      "tests": 8,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.RouteContinuityTest",
+      "tests": 7,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.RouteSafetyEvaluatorTest",
+      "tests": 4,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.RouteSearchEngineTest",
+      "tests": 7,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.SafetyRepositoryTest",
+      "tests": 3,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.location.WalkingRouteProtocolTest",
+      "tests": 6,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.wear.VoiceAacTest",
+      "tests": 7,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.wear.VoiceWavTest",
+      "tests": 5,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.example.safepath_test1.wear.WearMapFrameTest",
+      "tests": 5,
+      "failures": 0,
+      "skipped": 0
+    }
+  ]
+}
