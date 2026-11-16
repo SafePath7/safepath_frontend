@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,10 @@ import com.example.safepath_test1.ui.login.SignupScreen
 import com.example.safepath_test1.ui.profile.ProfileScreen
 import com.example.safepath_test1.ui.theme.AppBackground
 import com.example.safepath_test1.ui.theme.SafePathTheme
+import com.example.safepath_test1.wear.WatchAlertState
+import com.example.safepath_test1.wear.WearMessenger
+import com.example.safepath_test1.wear.authenticateRelease
+import com.example.safepath_test1.wear.cancelSosNotification
 import com.google.firebase.auth.FirebaseAuth
 import com.example.safepath_test1.api.AccountRepository
 import com.example.safepath_test1.api.accountErrorMessage
@@ -61,6 +66,9 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     val scope = rememberCoroutineScope()
     val backendRepository = remember(context) { com.example.safepath_test1.api.BackendRepository(context) }
     var sosPending by remember { mutableStateOf(false) }
+    val watchAlertAt by WatchAlertState.requestedAt.collectAsState()
+    var hiddenAlertAt by remember { mutableStateOf<Long?>(null) }
+    var releasePending by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -203,6 +211,50 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                 },
                 dismissButton = {
                     TextButton(onClick = { if (!sosPending) showSosConfirmation = false }) { Text("취소") }
+                },
+            )
+        }
+
+        // 워치에서 SOS가 눌렸을 때: 본인 확인을 거쳐 해제하면 워치가 길안내 화면으로 돌아간다.
+        val alertAt = watchAlertAt
+        if (alertAt != null && hiddenAlertAt != alertAt) {
+            AlertDialog(
+                onDismissRequest = { if (!releasePending) hiddenAlertAt = alertAt },
+                title = { Text("워치에서 SOS가 눌렸어요") },
+                text = { Text("해제하면 워치가 길안내 화면으로 돌아갑니다.") },
+                confirmButton = {
+                    Button(
+                        enabled = !releasePending,
+                        onClick = {
+                            val activity = context as? android.app.Activity
+                            if (activity == null) {
+                                android.widget.Toast.makeText(context, "해제할 수 없습니다. 앱을 다시 열어 주세요.", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                releasePending = true
+                                authenticateRelease(activity) { confirmed ->
+                                    if (confirmed) {
+                                        WearMessenger.sendRelease(context) { sent ->
+                                            releasePending = false
+                                            if (sent) {
+                                                WatchAlertState.clear()
+                                                cancelSosNotification(context)
+                                            } else {
+                                                android.widget.Toast.makeText(context, "워치에 해제 신호를 보내지 못했습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    } else {
+                                        releasePending = false
+                                        android.widget.Toast.makeText(context, "본인 확인에 실패해 해제하지 않았습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                    ) {
+                        Text("해제")
+                    }
+                },
+                dismissButton = {
+                    TextButton(enabled = !releasePending, onClick = { hiddenAlertAt = alertAt }) { Text("나중에") }
                 },
             )
         }

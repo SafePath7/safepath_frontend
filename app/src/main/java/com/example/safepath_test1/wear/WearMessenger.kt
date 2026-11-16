@@ -26,6 +26,9 @@ object WearMessenger {
     private const val TAG = "WearMessenger"
     const val PATH_STATUS = "/safepath/status"
 
+    /** 폰 → 워치: 위험상황 해제 신호. 워치의 DataLayerContract.RELEASE와 같은 값이어야 한다(두 모듈은 코드를 공유하지 못한다). */
+    const val PATH_RELEASE = "/safepath/release"
+
     /**
      * Route polyline is downsampled to this many points before being sent to the watch - plenty
      * for a small watch screen, and keeps the DataItem payload tiny regardless of how long the
@@ -81,6 +84,30 @@ object WearMessenger {
                 )
             }
             .addOnFailureListener { e -> Log.e(TAG, "DataClient sync failed for state=$state", e) }
+    }
+
+    /**
+     * 워치의 위험상황 화면을 닫고 길안내로 돌아가게 하는 해제 신호를 보낸다.
+     * 워치는 위험상황일 때 온 신호만 받아들이고, 두 기기 시계가 5초까지 어긋나는 것은 봐준다.
+     * 같은 내용은 다시 전달되지 않으므로 매번 updatedAt(현재 시각)을 담는다.
+     * 데이터 계층에 저장되면 [onResult]에 true, 실패하면 false를 돌려준다.
+     */
+    fun sendRelease(context: Context, onResult: (Boolean) -> Unit = {}) {
+        val request =
+            PutDataMapRequest.create(PATH_RELEASE)
+                .apply { dataMap.putLong("updatedAt", System.currentTimeMillis()) }
+                .asPutDataRequest()
+                .setUrgent()
+        Wearable.getDataClient(context)
+            .putDataItem(request)
+            .addOnSuccessListener {
+                Log.i(TAG, "Release signal synced")
+                onResult(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Release signal failed", e)
+                onResult(false)
+            }
     }
 
     fun sendIdle(context: Context) {
