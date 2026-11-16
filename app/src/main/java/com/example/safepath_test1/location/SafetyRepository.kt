@@ -268,44 +268,6 @@ object SafetyRepository {
             .toList()
     }
 
-    // 시설마다 구간 쌍 리스트를 만들지 않고 순회하며, 가까운 구간을 찾으면 즉시 종료한다.
-    private fun isNearRoute(
-        facility: SafetyFacility,
-        route: List<SafetyFacility>,
-        thresholdMeters: Double,
-    ): Boolean {
-        for (index in 0 until route.lastIndex) {
-            if (
-                distanceToSegmentMeters(facility, route[index], route[index + 1]) <= thresholdMeters
-            ) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun distanceToSegmentMeters(
-        point: SafetyFacility,
-        start: SafetyFacility,
-        end: SafetyFacility,
-    ): Double {
-        val latitudeScale = 111_320.0
-        val longitudeScale = latitudeScale * Math.cos(Math.toRadians(point.latitude))
-        val px = point.longitude * longitudeScale
-        val py = point.latitude * latitudeScale
-        val sx = start.longitude * longitudeScale
-        val sy = start.latitude * latitudeScale
-        val ex = end.longitude * longitudeScale
-        val ey = end.latitude * latitudeScale
-        val dx = ex - sx
-        val dy = ey - sy
-        val lengthSquared = dx * dx + dy * dy
-        val ratio =
-            if (lengthSquared == 0.0) 0.0
-            else (((px - sx) * dx + (py - sy) * dy) / lengthSquared).coerceIn(0.0, 1.0)
-        return Math.hypot(px - (sx + ratio * dx), py - (sy + ratio * dy))
-    }
-
     private fun distanceInMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val r = 6371000.0
         val dLat = Math.toRadians(lat2 - lat1)

@@ -424,34 +424,3 @@ private fun createDotBitmap(size: Int, fillColor: Int, strokeWidth: Int): Bitmap
     )
     return bitmap
 }
-
-private fun createFacilityBitmap(camera: Boolean): Bitmap {
-    val bitmap = Bitmap.createBitmap(36, 36, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val blue = Color.parseColor("#5FA8D3")
-    paint.color = Color.WHITE
-    canvas.drawCircle(18f, 18f, 16f, paint)
-    paint.color = blue
-    paint.style = Paint.Style.STROKE
-    paint.strokeWidth = 2f
-    canvas.drawCircle(18f, 18f, 15f, paint)
-    if (camera) {
-        canvas.drawRoundRect(9f, 12f, 22f, 24f, 2f, 2f, paint)
-        val lens =
-            android.graphics.Path().apply {
-                moveTo(22f, 16f)
-                lineTo(28f, 12f)
-                lineTo(28f, 24f)
-                lineTo(22f, 20f)
-                close()
-            }
-        canvas.drawPath(lens, paint)
-    } else {
-        canvas.drawLine(18f, 12f, 18f, 27f, paint)
-        canvas.drawLine(12f, 27f, 24f, 27f, paint)
-        canvas.drawArc(10f, 9f, 26f, 22f, 180f, 180f, false, paint)
-        canvas.drawLine(10f, 16f, 26f, 16f, paint)
-    }
-    return bitmap
-}
