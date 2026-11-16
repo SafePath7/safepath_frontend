@@ -4,18 +4,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.presentation.MainActivity
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WatchLaunchListener"
-
-/** Must match WatchLauncher.PATH_LAUNCH_WATCH (app module) - the two modules can't share code. */
-private const val PATH_LAUNCH_WATCH = "/safepath/launch_watch"
 
 private const val CHANNEL_ID = "safepath_launch"
 private const val NOTIFICATION_ID = 1001
@@ -34,7 +31,7 @@ class WatchLaunchListenerService : WearableListenerService() {
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         for (event in dataEvents) {
             if (event.type != DataEvent.TYPE_CHANGED) continue
-            if (event.dataItem.uri.path != PATH_LAUNCH_WATCH) continue
+            if (event.dataItem.uri.path != DataLayerPaths.LAUNCH_WATCH) continue
 
             Log.i(TAG, "Launch request received from phone")
             launchDirectly()
@@ -42,13 +39,15 @@ class WatchLaunchListenerService : WearableListenerService() {
         }
     }
 
+    /** 앱을 앞으로 가져오는 Intent. 직접 실행과 알림 탭이 같은 것을 쓴다. */
+    private fun mainActivityIntent(): Intent =
+        Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+
     private fun launchDirectly() {
         try {
-            val intent =
-                Intent(this, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
-            startActivity(intent)
+            startActivity(mainActivityIntent())
         } catch (e: Exception) {
             Log.e(TAG, "Direct launch failed, relying on notification fallback", e)
         }
@@ -64,25 +63,20 @@ class WatchLaunchListenerService : WearableListenerService() {
         try {
             val manager = getSystemService(NotificationManager::class.java) ?: return
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_ID,
-                        "SafePath 실행",
-                        NotificationManager.IMPORTANCE_DEFAULT,
-                    ),
-                )
-            }
+            // minSdk가 30이라 알림 채널은 항상 만들 수 있다.
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "SafePath 실행",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ),
+            )
 
-            val contentIntent =
-                Intent(this, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
             val pendingIntent =
                 PendingIntent.getActivity(
                     this,
                     0,
-                    contentIntent,
+                    mainActivityIntent(),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 

@@ -1,5 +1,7 @@
 package com.example.safepath_test1.wear.presentation
 
+import com.example.safepath_test1.wear.geo.computeRouteProgress
+import com.example.safepath_test1.wear.geo.cumulativeMeters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

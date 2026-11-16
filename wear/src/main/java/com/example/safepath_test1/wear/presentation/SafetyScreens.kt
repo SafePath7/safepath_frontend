@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -99,36 +97,13 @@ private fun WarningIcon(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** 음성·소리·움직임·경로처럼 지금 감시 중인 항목을 보여주는 작은 칩(초록 점). */
-@Composable
-private fun DetectionChip(label: String) {
-    val s = rememberWatchScale()
-    Row(
-        modifier =
-            Modifier.height(maxOf(s.dp(24), 18.dp))
-                .clip(RoundedCornerShape(50))
-                .background(WatchColors.Surface)
-                .padding(horizontal = s.dp(8)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(s.dp(7)).clip(CircleShape).background(WatchColors.Success))
-        Text(
-            text = " $label",
-            color = Color.White,
-            fontSize = s.sp(11),
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
-}
-
 /** 확인 질문의 알약 버튼. 명세: 높이 60. 작은 화면에서도 누를 수 있게 최소 크기를 둔다. */
 @Composable
 private fun ActionPill(label: String, color: Color, onClick: () -> Unit) {
     val s = rememberWatchScale()
     Box(
         modifier =
-            Modifier.size(width = maxOf(s.dp(138), 70.dp), height = maxOf(s.dp(60), 34.dp))
+            Modifier.size(width = s.dpAtLeast(138, 70.dp), height = s.dpAtLeast(60, 34.dp))
                 .clip(RoundedCornerShape(50))
                 .background(color)
                 .clickable(onClick = onClick),
@@ -148,14 +123,14 @@ private fun ActionPill(label: String, color: Color, onClick: () -> Unit) {
  * W-02 안전 상태. 길안내 화면 옆 페이지로, 특별한 안내가 없을 때 "안전하게 이동 중"을 보여준다.
  * 링은 초록으로 가득. 보호자 인원수는 앱/백엔드 연동 전이라 문구에서 뺐다.
  *
- * AI 서버가 위험 신호를 보내기 전까지는 방패 원을 길게 누르는 것이 확인 질문 화면의 테스트용 트리거다.
+ * AI 서버가 위험 신호를 보내기 전까지는 방패 원을 길게 누르는 것이 확인 질문 화면의 테스트용 트리거다(디버그 빌드에서만 동작).
  */
 @Composable
 internal fun MovingStatusPage(onShieldLongPress: () -> Unit) {
     val s = rememberWatchScale()
-    Box(Modifier.fillMaxSize()) {
-        WatchRing(progress = 1f, color = WatchColors.Success)
-        WatchClock(Modifier.align(Alignment.TopCenter).offset(y = s.dp(24)))
+    // 테스트용 조작은 개발 중 빌드에서만 연다. 배포 빌드에서는 방패를 길게 눌러도 확인 질문이 뜨지 않는다.
+    val testTriggerEnabled = rememberIsDebuggable()
+    WatchScreenScaffold(ringProgress = 1f, ringColor = WatchColors.Success) {
         Column(
             modifier = Modifier.align(Alignment.TopCenter).offset(y = s.dp(54)),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -165,9 +140,15 @@ internal fun MovingStatusPage(onShieldLongPress: () -> Unit) {
                     Modifier.size(s.dp(76))
                         .clip(CircleShape)
                         .background(WatchColors.SafeIconBg)
-                        .pointerInput(Unit) {
-                            detectTapGestures(onLongPress = { onShieldLongPress() })
-                        },
+                        .then(
+                            if (testTriggerEnabled) {
+                                Modifier.pointerInput(Unit) {
+                                    detectTapGestures(onLongPress = { onShieldLongPress() })
+                                }
+                            } else {
+                                Modifier
+                            }
+                        ),
                 contentAlignment = Alignment.Center,
             ) {
                 ShieldIcon(Modifier.size(s.dp(38)))
@@ -204,9 +185,11 @@ internal fun MovingStatusPage(onShieldLongPress: () -> Unit) {
 internal fun CheckInScreen(remainingMs: Long, totalMs: Long, onOkay: () -> Unit, onHelp: () -> Unit) {
     val s = rememberWatchScale()
     val seconds = ((remainingMs + 999) / 1000).coerceAtLeast(0)
-    Box(Modifier.fillMaxSize().background(WatchColors.Bg)) {
-        WatchRing(progress = remainingMs.toFloat() / totalMs, color = WatchColors.Warning)
-        WatchClock(Modifier.align(Alignment.TopCenter).offset(y = s.dp(24)))
+    WatchScreenScaffold(
+        ringProgress = remainingMs.toFloat() / totalMs,
+        ringColor = WatchColors.Warning,
+        background = WatchColors.Bg,
+    ) {
         Column(
             modifier = Modifier.align(Alignment.TopCenter).offset(y = s.dp(56)),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -268,9 +251,7 @@ internal fun GuardianAlertedScreen(requestedAt: Long, onTestRelease: () -> Unit)
     val time =
         remember(requestedAt) { SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(requestedAt)) }
     val buttonShape = RoundedCornerShape(50)
-    Box(Modifier.fillMaxSize().background(WatchColors.DangerBg)) {
-        WatchRing(progress = 1f, color = Color.White)
-        WatchClock(Modifier.align(Alignment.TopCenter).offset(y = s.dp(24)))
+    WatchScreenScaffold(ringProgress = 1f, ringColor = Color.White, background = WatchColors.DangerBg) {
         Column(
             modifier = Modifier.align(Alignment.TopCenter).offset(y = s.dp(56)).widthIn(max = s.dp(330)),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -307,7 +288,7 @@ internal fun GuardianAlertedScreen(requestedAt: Long, onTestRelease: () -> Unit)
             modifier =
                 Modifier.align(Alignment.TopCenter)
                     .offset(y = s.dp(250))
-                    .size(width = maxOf(s.dp(160), 96.dp), height = maxOf(s.dp(52), 32.dp))
+                    .size(width = s.dpAtLeast(160, 96.dp), height = s.dpAtLeast(52, 32.dp))
                     .clip(buttonShape)
                     .border(s.dp(2), Color.White, buttonShape)
                     .pointerInput(Unit) { detectTapGestures(onLongPress = { onTestRelease() }) },

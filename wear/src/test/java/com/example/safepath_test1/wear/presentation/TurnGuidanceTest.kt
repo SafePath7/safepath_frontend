@@ -1,5 +1,9 @@
 package com.example.safepath_test1.wear.presentation
 
+import com.example.safepath_test1.wear.comm.decodeRouteSteps
+import com.example.safepath_test1.wear.geo.RouteStep
+import com.example.safepath_test1.wear.geo.bearingDegrees
+import com.example.safepath_test1.wear.geo.turnAngleDegrees
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

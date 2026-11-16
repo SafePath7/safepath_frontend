@@ -2,18 +2,11 @@ package com.example.safepath_test1.wear.sensors
 
 import android.content.Context
 import android.util.Log
-import com.google.android.gms.wearable.PutDataMapRequest
-import com.google.android.gms.wearable.Wearable
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.VoiceKeys
 import java.util.concurrent.Executors
 
 private const val TAG = "WatchVoiceSender"
-
-/** Phone-side WearVoiceRelayService (app module) listens on this same path - keep both in sync. */
-const val PATH_VOICE = "/safepath/voice"
-
-/** "format" 값. 폰 WearVoiceRelayService도 같은 값을 쓴다. */
-private const val FORMAT_AAC = "aac"
-private const val FORMAT_PCM16 = "pcm16"
 
 /**
  * WatchVoiceRecorder가 녹음한 1초 조각을 AAC로 압축해서 폰으로 보낸다.
@@ -31,6 +24,24 @@ object WatchVoiceSender {
     private var encoderUnavailable = false
     private var nextSeq = 0L
 
+    /**
+     * 새 녹음을 시작할 때 부른다. 순번을 0부터 다시 세고, 지난번에 압축이 안 됐던 기기도 다시 시도하도록 압축기를 새로 만든다.
+     * 순번이 0으로 돌아가도 폰은 `capturedAt`이 더 새로우면 새 녹음으로 받아들인다(VoiceChunkGate).
+     * 압축기를 만들고 없애는 일은 조각을 보내는 스레드에서 해서, 보내던 조각과 겹치지 않는다.
+     */
+    fun startSession() {
+        executor.execute {
+            releaseEncoder()
+            encoderUnavailable = false
+            nextSeq = 0L
+        }
+    }
+
+    /** 녹음이 끝났을 때 부른다. 압축기가 잡고 있는 코덱 자원을 놓는다. */
+    fun stopSession() {
+        executor.execute { releaseEncoder() }
+    }
+
     fun send(context: Context, audioBytes: ByteArray) {
         val appContext = context.applicationContext
         val capturedAt = System.currentTimeMillis()
@@ -41,25 +52,22 @@ object WatchVoiceSender {
         val aac = encodeOrNull(pcm)
         // 인코더가 이번 조각의 소리를 다음 조각과 함께 내보내면 이번 결과는 비어 있다. 보낼 게 없으면 건너뛴다.
         if (aac != null && aac.isEmpty()) return
-        val request =
-            PutDataMapRequest.create(PATH_VOICE)
-                .apply {
-                    if (aac != null) {
-                        dataMap.putString("format", FORMAT_AAC)
-                        dataMap.putByteArray("audio", aac)
-                    } else {
-                        dataMap.putString("format", FORMAT_PCM16)
-                        dataMap.putByteArray("audio", pcm)
-                    }
-                    dataMap.putLong("seq", nextSeq++)
-                    dataMap.putLong("capturedAt", capturedAt)
-                }
-                .asPutDataRequest()
-                .setUrgent()
-
-        Wearable.getDataClient(context)
-            .putDataItem(request)
-            .addOnFailureListener { e -> Log.e(TAG, "Failed to relay audio chunk to phone", e) }
+        DataLayerSender.putUrgent(
+            context = context,
+            path = DataLayerPaths.VOICE,
+            tag = TAG,
+            failureMessage = "Failed to relay audio chunk to phone",
+        ) {
+            if (aac != null) {
+                putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_AAC)
+                putByteArray(VoiceKeys.AUDIO, aac)
+            } else {
+                putString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_PCM16)
+                putByteArray(VoiceKeys.AUDIO, pcm)
+            }
+            putLong(VoiceKeys.SEQ, nextSeq++)
+            putLong(VoiceKeys.CAPTURED_AT, capturedAt)
+        }
     }
 
     private fun encodeOrNull(pcm: ByteArray): ByteArray? {
@@ -69,10 +77,14 @@ object WatchVoiceSender {
             current.encode(pcm)
         } catch (e: Exception) {
             Log.e(TAG, "AAC encoding failed - sending raw PCM instead", e)
-            encoder?.release()
-            encoder = null
+            releaseEncoder()
             encoderUnavailable = true
             null
         }
+    }
+
+    private fun releaseEncoder() {
+        encoder?.release()
+        encoder = null
     }
 }

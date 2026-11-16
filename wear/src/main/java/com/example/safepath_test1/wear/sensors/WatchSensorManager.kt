@@ -18,10 +18,9 @@ private const val SAMPLING_PERIOD_US = 50_000
 /**
  * Reads the watch's built-in accelerometer and gyroscope.
  *
- * Usage (typically from a DisposableEffect so collection stops when the screen leaves composition):
- * val sensorManager = remember { WatchSensorManager(context) } DisposableEffect(Unit) {
- * sensorManager.startAccelCollection() sensorManager.startGyroCollection() onDispose {
- * sensorManager.stopCollection() } } val motion by sensorManager.motionData.collectAsState()
+ * Usage (see SensorEffect in WearEffects.kt): start both collections from a DisposableEffect and
+ * call stopCollection() in onDispose so collection stops when the screen leaves composition, then
+ * collect [motionData] to relay each reading.
  *
  * Samples at a fixed 20Hz (SAMPLING_PERIOD_US) rather than the old ~5Hz default so the relayed data
  * has enough resolution for motion analysis. No runtime permission is needed for this rate -
@@ -39,12 +38,6 @@ class WatchSensorManager(context: Context) {
     private val _motionData = MutableStateFlow<MotionData?>(null)
     /** Latest combined reading. null until both sensors have reported at least once. */
     val motionData: StateFlow<MotionData?> = _motionData.asStateFlow()
-
-    val hasAccelerometer: Boolean
-        get() = accelerometer != null
-
-    val hasGyroscope: Boolean
-        get() = gyroscope != null
 
     private val listener =
         object : SensorEventListener {
@@ -70,18 +63,22 @@ class WatchSensorManager(context: Context) {
                         else -> return
                     } ?: return
                 _motionData.value = updated
-                Log.d(
-                    TAG,
-                    "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f)"
-                        .format(
-                            updated.accelX,
-                            updated.accelY,
-                            updated.accelZ,
-                            updated.gyroX,
-                            updated.gyroY,
-                            updated.gyroZ,
-                        ),
-                )
+                // 20Hz라 로그 문자열을 매번 만들면 낭비다. 필요할 때만
+                // `adb shell setprop log.tag.WatchSensorManager DEBUG`로 켠다.
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(
+                        TAG,
+                        "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f)"
+                            .format(
+                                updated.accelX,
+                                updated.accelY,
+                                updated.accelZ,
+                                updated.gyroX,
+                                updated.gyroY,
+                                updated.gyroZ,
+                            ),
+                    )
+                }
             }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
