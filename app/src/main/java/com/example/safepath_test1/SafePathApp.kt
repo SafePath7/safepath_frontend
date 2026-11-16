@@ -37,13 +37,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.safepath_test1.friends.CreatedFriendInvite
-import com.example.safepath_test1.location.shareLocation
 import com.example.safepath_test1.location.TestJourneyClient
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.model.PlaceSelection
 import com.example.safepath_test1.ui.SafePathTab
 import com.example.safepath_test1.ui.components.SafePathBottomBar
-import com.example.safepath_test1.ui.guardian.FriendsScreen
 import com.example.safepath_test1.ui.guardian.GuardianScreen
 import com.example.safepath_test1.ui.home.HomeScreen
 import com.example.safepath_test1.ui.login.LoginPage
