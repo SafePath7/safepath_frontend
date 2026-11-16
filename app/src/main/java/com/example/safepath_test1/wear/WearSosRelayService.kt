@@ -3,6 +3,7 @@ package com.example.safepath_test1.wear
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
@@ -37,11 +38,13 @@ class WearSosRelayService : WearableListenerService() {
             if (event.dataItem.uri.path != PATH_SOS) continue
 
             Log.i(TAG, "SOS received from watch")
-            showSosNotification()
+            val requestedAt = System.currentTimeMillis()
+            WatchAlertState.onSosReceived(requestedAt)
+            showSosNotification(requestedAt)
         }
     }
 
-    private fun showSosNotification() {
+    private fun showSosNotification(requestedAt: Long) {
         // Defensive, same reasoning as WatchLaunchListenerService.showFallbackNotification(): this
         // runs inside onDataChanged() with no caller to catch a thrown SecurityException (API 33+
         // if POST_NOTIFICATIONS was revoked after install), and an uncaught exception here would
@@ -62,6 +65,8 @@ class WearSosRelayService : WearableListenerService() {
             val contentIntent =
                 Intent(this, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    // 앱 프로세스가 죽었어도 알림을 누르면 위험 중 상태를 되살릴 수 있게 요청 시각을 싣는다.
+                    putExtra(WatchAlertState.EXTRA_REQUESTED_AT, requestedAt)
                 }
             val pendingIntent =
                 PendingIntent.getActivity(
@@ -86,4 +91,9 @@ class WearSosRelayService : WearableListenerService() {
             Log.e(TAG, "SOS notification failed", e)
         }
     }
+}
+
+/** 해제했을 때 폰에 남은 "SOS 수신" 알림을 지운다. */
+fun cancelSosNotification(context: Context) {
+    context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
 }
