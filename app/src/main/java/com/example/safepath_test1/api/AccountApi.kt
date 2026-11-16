@@ -1,18 +1,9 @@
 package com.example.safepath_test1.api
 
 import android.content.Context
-import com.example.safepath_test1.BuildConfig
-import com.example.safepath_test1.R
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
-import kotlinx.coroutines.tasks.await
 import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import retrofit2.HttpException
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
-import java.util.concurrent.TimeUnit
 
 data class AccountLogin(val userId: Long?, val status: String)
 data class AccountRegistration(val userId: Long)
@@ -41,30 +32,14 @@ internal fun checkedAccountBaseUrl(value: String, debug: Boolean): String {
 }
 
 class AccountRepository(context: Context) {
-    private val auth = FirebaseAuth.getInstance()
-    private val api: AccountApi by lazy {
-        val url = checkedAccountBaseUrl(context.applicationContext.getString(R.string.safepath_api_base_url), BuildConfig.DEBUG)
-        Retrofit.Builder().baseUrl(url).client(OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).build())
-            .addConverterFactory(GsonConverterFactory.create()).build().create(AccountApi::class.java)
-    }
-    private suspend fun <T> request(forceRefresh: Boolean = false, block: suspend (String) -> T): T {
-        val user: FirebaseUser = auth.currentUser ?: error("로그인이 필요합니다.")
-        val uid = user.uid
-        val token = user.getIdToken(forceRefresh).await().token ?: error("로그인 인증을 확인할 수 없습니다.")
-        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-        val result = try { block("Bearer $token") } catch (e: HttpException) {
-            if (e.code() == 401 && auth.currentUser?.uid == uid) auth.signOut()
-            throw e
-        }
-        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-        return result
-    }
-    suspend fun login(): AccountLogin = request { api.login(it) }
-    suspend fun register(name: String): AccountRegistration = request(true) { api.register(it, RegistrationBody(name.trim())) }
-    suspend fun profile(): AccountProfile = request { api.profile(it) }
-    suspend fun update(name: String) = request { api.update(it, ProfileBody(name.trim())) }
-    suspend fun changePhone(verifiedPhone: String) = request(true) { api.changePhone(it, PhoneBody(verifiedPhone)) }
-    suspend fun withdraw() = request { api.withdraw(it) }
+    private val backend = AuthenticatedBackend(context, readTimeoutSeconds = 10)
+    private val api: AccountApi by lazy { backend.createApi(AccountApi::class.java) }
+    suspend fun login(): AccountLogin = backend.request { api.login(it) }
+    suspend fun register(name: String): AccountRegistration = backend.request(true) { api.register(it, RegistrationBody(name.trim())) }
+    suspend fun profile(): AccountProfile = backend.request { api.profile(it) }
+    suspend fun update(name: String) = backend.request { api.update(it, ProfileBody(name.trim())) }
+    suspend fun changePhone(verifiedPhone: String) = backend.request(true) { api.changePhone(it, PhoneBody(verifiedPhone)) }
+    suspend fun withdraw() = backend.request { api.withdraw(it) }
 }
 
 fun accountErrorMessage(error: Throwable): String = when ((error as? HttpException)?.code()) {

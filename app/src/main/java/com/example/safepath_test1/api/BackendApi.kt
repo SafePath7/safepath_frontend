@@ -1,16 +1,7 @@
 package com.example.safepath_test1.api
 
 import android.content.Context
-import com.example.safepath_test1.BuildConfig
-import com.example.safepath_test1.R
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.tasks.await
-import okhttp3.OkHttpClient
-import retrofit2.HttpException
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
-import java.util.concurrent.TimeUnit
 
 data class GuardianRegistration(val id: Long, val userId: Long, val userName: String, val guardianId: Long, val guardianName: String, val status: String, val canViewLocation: Boolean, val canViewStatus: Boolean, val canViewPersonalInfo: Boolean)
 data class GuardianRequest(val guardianId: Long)
@@ -34,29 +25,16 @@ interface BackendApi {
 }
 
 class BackendRepository(context: Context) {
-    private val firebase = FirebaseAuth.getInstance()
-    private val api = Retrofit.Builder().baseUrl(checkedAccountBaseUrl(context.applicationContext.getString(R.string.safepath_api_base_url), BuildConfig.DEBUG))
-        .client(OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build())
-        .addConverterFactory(GsonConverterFactory.create()).build().create(BackendApi::class.java)
-    private suspend fun <T> request(block: suspend (String) -> T): T {
-        val user = firebase.currentUser ?: error("로그인이 필요합니다.")
-        val token = user.getIdToken(false).await().token ?: error("인증 토큰이 없습니다.")
-        check(firebase.currentUser?.uid == user.uid) { "로그인 계정이 변경되었습니다." }
-        val result = try { block("Bearer $token") } catch (e: HttpException) {
-            if (e.code() == 401 && firebase.currentUser?.uid == user.uid) firebase.signOut()
-            throw e
-        }
-        check(firebase.currentUser?.uid == user.uid) { "로그인 계정이 변경되었습니다." }
-        return result
-    }
-    suspend fun guardians() = request { api.guardians(it) }
-    suspend fun requestGuardian(id: Long) = request { api.requestGuardian(it, GuardianRequest(id)) }
-    suspend fun respond(id: Long, action: String) = request { api.respond(it, id, action) }
-    suspend fun permissions(id: Long, value: GuardianPermissions) = request { api.permissions(it, id, value) }
-    suspend fun registerToken(token: String) = request { api.registerToken(it, FcmTokenBody(token)) }
-    suspend fun sos() = request { api.sos(it) }
-    suspend fun startSession() = request { api.startSession(it) }
-    suspend fun sessionStatus(id: String) = request { api.sessionStatus(it, id) }
-    suspend fun endSession(id: String) = request { api.endSession(it, id) }
-    suspend fun riskEvents(userId: Long? = null) = request { api.riskEvents(it, userId) }
+    private val backend = AuthenticatedBackend(context, readTimeoutSeconds = 15)
+    private val api: BackendApi by lazy { backend.createApi(BackendApi::class.java) }
+    suspend fun guardians() = backend.request { api.guardians(it) }
+    suspend fun requestGuardian(id: Long) = backend.request { api.requestGuardian(it, GuardianRequest(id)) }
+    suspend fun respond(id: Long, action: String) = backend.request { api.respond(it, id, action) }
+    suspend fun permissions(id: Long, value: GuardianPermissions) = backend.request { api.permissions(it, id, value) }
+    suspend fun registerToken(token: String) = backend.request { api.registerToken(it, FcmTokenBody(token)) }
+    suspend fun sos() = backend.request { api.sos(it) }
+    suspend fun startSession() = backend.request { api.startSession(it) }
+    suspend fun sessionStatus(id: String) = backend.request { api.sessionStatus(it, id) }
+    suspend fun endSession(id: String) = backend.request { api.endSession(it, id) }
+    suspend fun riskEvents(userId: Long? = null) = backend.request { api.riskEvents(it, userId) }
 }

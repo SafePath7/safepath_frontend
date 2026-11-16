@@ -1,0 +1,51 @@
+package com.example.safepath_test1.api
+
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+class BackendApiContractTest {
+    @Test fun guardianAndNotificationRequestsMatchBackend() = runBlocking {
+        val requests = mutableListOf<List<String>>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { exchange ->
+            val body = exchange.requestBody.bufferedReader().readText()
+            requests.add(listOf(exchange.requestMethod, exchange.requestURI.toString(), body, exchange.requestHeaders.getFirst("Authorization").orEmpty()))
+            val path = exchange.requestURI.path
+            val json = when {
+                path == "/api/guardian-registrations" && exchange.requestMethod == "GET" -> "[]"
+                path.startsWith("/api/guardian-registrations") -> "{\"id\":3,\"userId\":1,\"guardianId\":2,\"status\":\"PENDING\"}"
+                path == "/api/notifications/sos" -> "{\"successCount\":1,\"failureCount\":0}"
+                path == "/api/risk-events" -> "[]"
+                else -> ""
+            }.toByteArray()
+            exchange.sendResponseHeaders(if (json.isEmpty()) 204 else 200, if (json.isEmpty()) -1 else json.size.toLong())
+            if (json.isNotEmpty()) exchange.responseBody.use { it.write(json) } else exchange.close()
+        }
+        server.start()
+        try {
+            val api = Retrofit.Builder().baseUrl("http://127.0.0.1:${server.address.port}/")
+                .addConverterFactory(GsonConverterFactory.create()).build().create(BackendApi::class.java)
+            val token = "Bearer test-token"
+            assertTrue(api.guardians(token).isEmpty())
+            assertEquals(3L, api.requestGuardian(token, GuardianRequest(2)).id)
+            api.respond(token, 3, "accept")
+            api.permissions(token, 3, GuardianPermissions(true, false, true))
+            api.registerToken(token, FcmTokenBody("token"))
+            assertEquals(1, api.sos(token).successCount)
+            assertTrue(api.riskEvents(token, 2).isEmpty())
+            assertEquals(listOf("GET", "POST", "PATCH", "PATCH", "PUT", "POST", "GET"), requests.map { it[0] })
+            assertEquals("{\"guardianId\":2}", requests[1][2])
+            assertEquals("/api/guardian-registrations/3/accept", requests[2][1])
+            assertEquals("{\"canViewLocation\":true,\"canViewStatus\":false,\"canViewPersonalInfo\":true}", requests[3][2])
+            assertEquals("{\"fcmToken\":\"token\"}", requests[4][2])
+            assertEquals("/api/risk-events?userId=2", requests[6][1])
+            assertTrue(requests.all { it[3] == token })
+        } finally { server.stop(0) }
+    }
+}
