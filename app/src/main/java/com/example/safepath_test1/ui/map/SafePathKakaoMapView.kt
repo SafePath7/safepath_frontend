@@ -70,18 +70,22 @@ fun SafePathKakaoMapView(
     alternativeRouteLines: List<Pair<String, String>> = emptyList(),
     remainingRouteGeoJson: String? = null,
     currentMarkerColor: String = "#5FA8D3",
+    facilityRetry: Int = 0,
+    onFacilityError: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnMapClick by rememberUpdatedState(onMapClick)
     val latestCurrentLocation by rememberUpdatedState(currentLocation)
+    val latestFacilityError by rememberUpdatedState(onFacilityError)
     val mapView = remember(context) { MapView(context) }
 
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
     var hasCentered by remember { mutableStateOf(false) }
     var lastRecenterToken by remember { mutableIntStateOf(recenterToken) }
-    val facilityLatitudeBucket = currentLocation?.latitude?.times(100.0)?.roundToInt()
-    val facilityLongitudeBucket = currentLocation?.longitude?.times(100.0)?.roundToInt()
+    var facilityCenter by remember { mutableStateOf(currentLocation ?: SeoulFallback) }
+    val facilityLatitudeBucket = (facilityCenter.latitude * 100.0).roundToInt()
+    val facilityLongitudeBucket = (facilityCenter.longitude * 100.0).roundToInt()
 
     // 화면 생명주기에 지도 자원을 맞추고 화면을 떠날 때 리스너와 지도를 해제한다.
     DisposableEffect(lifecycleOwner, mapView) {
@@ -110,6 +114,9 @@ fun SafePathKakaoMapView(
 
                 override fun onMapReady(map: KakaoMap) {
                     kakaoMap = map
+                    map.setOnCameraMoveEndListener { _, position, _ ->
+                        facilityCenter = GeoPoint(position.position.latitude, position.position.longitude)
+                    }
                     map.setOnMapClickListener { _, position, _, _ ->
                         latestOnMapClick?.invoke(GeoPoint(position.latitude, position.longitude))
                     }
@@ -180,6 +187,7 @@ fun SafePathKakaoMapView(
         showSafetyFacilities,
         facilityLatitudeBucket,
         facilityLongitudeBucket,
+        facilityRetry,
     ) {
         val map = kakaoMap ?: return@LaunchedEffect
         val manager = map.labelManager ?: return@LaunchedEffect
@@ -212,15 +220,10 @@ fun SafePathKakaoMapView(
             facilityMarkerStyle(context, "marker_streetlight.png")
         val (cctvOptions, lightOptions) =
             withContext(Dispatchers.Default) {
-                val center =
-                    if (facilityLatitudeBucket != null && facilityLongitudeBucket != null) {
-                        GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
-                    } else {
-                        SeoulFallback
-                    }
+                val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
                 val cctvs =
                     SafetyRepository.facilitiesNearPoint(
-                            SafetyRepository.getCctvFacilities(context),
+                            try { SafetyRepository.getCctvFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "CCTV 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityError("CCTV 정보를 불러오지 못했어요.") }; emptyList() },
                             center.latitude,
                             center.longitude,
                             FacilityDisplayRadiusMeters,
@@ -232,7 +235,7 @@ fun SafePathKakaoMapView(
                         }
                 val lights =
                     SafetyRepository.facilitiesNearPoint(
-                            try { SafetyRepository.getStreetlightFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "가로등 자료 조회 실패", e); emptyList() },
+                            try { SafetyRepository.getStreetlightFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "가로등 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityError("가로등 정보를 불러오지 못했어요.") }; emptyList() },
                             center.latitude,
                             center.longitude,
                             FacilityDisplayRadiusMeters,
@@ -248,7 +251,7 @@ fun SafePathKakaoMapView(
         if (lightOptions.isNotEmpty()) lightLayer.addLodLabels(lightOptions)
     }
 
-    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket, facilityRetry) {
         val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
         val layer = manager.getLodLayer(FireLayerId)
             ?: manager.addLodLayer(LabelLayerOptions.from(FireLayerId).setLodRadius(45f).setZOrder(6_200))
@@ -256,10 +259,9 @@ fun SafePathKakaoMapView(
         layer.setVisible(showSafetyFacilities)
         layer.removeAll()
         if (!showSafetyFacilities) return@LaunchedEffect
-        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
-            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
+        val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
         val stations = try { SafetyRepository.getFireStations(context) } catch (e: java.io.IOException) {
-            Log.w(MapTag, "소방시설 자료 조회 실패: ${e.message}"); return@LaunchedEffect
+            Log.w(MapTag, "소방시설 자료 조회 실패: ${e.message}"); latestFacilityError("소방시설 정보를 불러오지 못했어요."); return@LaunchedEffect
         }
         val style = facilityMarkerStyle(context, "marker_fire_station.png")
         val labels = withContext(Dispatchers.Default) {
@@ -269,7 +271,7 @@ fun SafePathKakaoMapView(
         if (labels.isNotEmpty()) layer.addLodLabels(labels)
     }
 
-    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket, facilityRetry) {
         val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
         val layer = manager.getLodLayer(PoliceLayerId)
             ?: manager.addLodLayer(LabelLayerOptions.from(PoliceLayerId).setLodRadius(45f).setZOrder(6_100))
@@ -277,9 +279,10 @@ fun SafePathKakaoMapView(
         layer.setVisible(showSafetyFacilities)
         layer.removeAll()
         if (!showSafetyFacilities) return@LaunchedEffect
-        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
-            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
-        val police = SafetyRepository.getPoliceFacilities(context)
+        val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
+        val police = try { SafetyRepository.getPoliceFacilities(context) } catch (e: java.io.IOException) {
+            Log.w(MapTag, "경찰시설 자료 조회 실패", e); latestFacilityError("경찰시설 정보를 불러오지 못했어요."); return@LaunchedEffect
+        }
         val style = facilityMarkerStyle(context, "marker_police_station.png")
         val labels = withContext(Dispatchers.Default) {
             SafetyRepository.facilitiesNearPoint(police, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
@@ -288,7 +291,7 @@ fun SafePathKakaoMapView(
         if (labels.isNotEmpty()) layer.addLodLabels(labels)
     }
 
-    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket) {
+    LaunchedEffect(kakaoMap, showSafetyFacilities, facilityLatitudeBucket, facilityLongitudeBucket, facilityRetry) {
         val manager = kakaoMap?.labelManager ?: return@LaunchedEffect
         val layer = manager.getLodLayer(BellLayerId)
             ?: manager.addLodLayer(LabelLayerOptions.from(BellLayerId).setLodRadius(45f).setZOrder(6_000))
@@ -296,10 +299,9 @@ fun SafePathKakaoMapView(
         layer.setVisible(showSafetyFacilities)
         layer.removeAll()
         if (!showSafetyFacilities) return@LaunchedEffect
-        val center = if (facilityLatitudeBucket != null && facilityLongitudeBucket != null)
-            GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0) else SeoulFallback
+        val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
         val bells = try { SafetyRepository.getEmergencyBells(context) } catch (e: java.io.IOException) {
-            Log.w(MapTag, "비상벨 자료 조회 실패", e); return@LaunchedEffect
+            Log.w(MapTag, "비상벨 자료 조회 실패", e); latestFacilityError("비상벨 정보를 불러오지 못했어요."); return@LaunchedEffect
         }
         val style = facilityMarkerStyle(context, "marker_safety_bell.png")
         val labels = withContext(Dispatchers.Default) {

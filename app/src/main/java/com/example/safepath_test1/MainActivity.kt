@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
         )
         // 화면 회전 등으로 다시 만들어진 경우에는 이미 처리한 알림 정보를 다시 읽지 않는다.
         if (savedInstanceState == null) restoreWatchAlert(intent)
+        if (savedInstanceState == null) com.example.safepath_test1.api.NotificationNavigation.accept(intent)
         setContent { SafePathApp() }
         WatchLauncher.launchIfWatchConnected(this)
     }
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         restoreWatchAlert(intent)
+        com.example.safepath_test1.api.NotificationNavigation.accept(intent)
     }
 
     /** SOS 알림을 눌러 들어온 경우 알림에 실린 요청 시각으로 위험 중 상태를 되살린다. 한 번 읽으면 지운다. */

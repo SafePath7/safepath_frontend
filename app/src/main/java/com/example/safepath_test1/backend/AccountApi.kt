@@ -49,10 +49,14 @@ fun accountErrorMessage(error: Throwable): String = when ((error as? HttpExcepti
     404 -> "등록된 회원정보가 없습니다."
     409 -> "이미 사용 중인 정보이거나 연관 정보가 있어 처리할 수 없습니다."
     413 -> "첨부파일의 크기가 너무 큽니다."
+    429 -> "요청이 많아요. 잠시 후 다시 시도해 주세요."
     422 -> "Google 계정의 이메일과 인증된 전화번호 연결 상태를 확인해 주세요."
     503 -> "서버에서 이 기능을 아직 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."
     else -> when (error) {
         is IllegalArgumentException, is IllegalStateException -> error.message ?: "서버 설정을 확인해 주세요."
+        is java.net.UnknownHostException -> "인터넷이나 서버 연결을 확인해 주세요."
+        is java.net.SocketTimeoutException -> "서버 응답이 늦어지고 있어요. 다시 시도해 주세요."
+        is java.io.IOException -> "연결이 끊겼어요. 네트워크를 확인하고 다시 시도해 주세요."
         else -> "서버에 연결하지 못했습니다. 네트워크와 서버 주소를 확인해 주세요."
     }
 }

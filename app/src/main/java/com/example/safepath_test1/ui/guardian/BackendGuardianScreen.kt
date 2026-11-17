@@ -29,7 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     val viewModel: BackendGuardianViewModel = viewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val rows = state.rows
+    val rows = state.rows.filterNot { it.status == "REVOKED" }
     val myId = state.myId
     val busy = state.busy
     val message = state.error

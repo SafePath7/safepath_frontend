@@ -2,6 +2,8 @@ package com.example.safepath_test1.ui.home
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -56,6 +58,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -145,11 +151,17 @@ fun HomeScreen(
     }
     var recenterToken by remember { mutableIntStateOf(0) }
     var showSafetyFacilities by rememberSaveable { mutableStateOf(true) }
+    var facilityRetry by remember { mutableIntStateOf(0) }
+    val facilitySnackbar = remember { SnackbarHostState() }
+    val facilityScope = rememberCoroutineScope()
     var activeTab by rememberSaveable { mutableStateOf("destination") }
     var isDestinationSearchOpen by rememberSaveable { mutableStateOf(false) }
     var stage by rememberSaveable { mutableStateOf("search") }
     var showJourneyEnd by remember { mutableStateOf(false) }
     var showSessionRecoveryEnd by remember { mutableStateOf(false) }
+    val recoveryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && testJourneyActive && !testJourneyPending) onTestJourneyEnd()
+    }
     var endPin by remember { mutableStateOf("") }
     var endPinError by remember { mutableStateOf(false) }
     var endAuthenticating by remember { mutableStateOf(false) }
@@ -293,6 +305,12 @@ fun HomeScreen(
             hasLocationPermission = hasLocationPermission,
             recenterToken = recenterToken,
             showSafetyFacilities = showSafetyFacilities,
+            facilityRetry = facilityRetry,
+            onFacilityError = { message ->
+                facilityScope.launch {
+                    if (facilitySnackbar.showSnackbar(message, actionLabel = "다시 시도", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) facilityRetry++
+                }
+            },
             destinationPoint = destinationPoint,
             routeLineGeoJson = if (stage == "navigation") selectedTestRoute else activeRoute?.geoJsonLineString,
             routeLineColor = activeRouteColor,
@@ -331,7 +349,6 @@ fun HomeScreen(
             },
             modifier = Modifier.fillMaxSize(),
         )
-
         if (stage == "search")
             RouteSearchCard(
                 originError = inputError != null && !origin.hasCoordinates(),
@@ -713,7 +730,7 @@ fun HomeScreen(
                             endAuthenticating = true
                             endAuthenticationCancellation = com.example.safepath_test1.session.BiometricSessionSigner.signChallenge(activity, alias, challenge,
                                 onSigned = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; onTestJourneyEnd() } },
-                                onFallback = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; android.widget.Toast.makeText(context, "생체인증 후 종료할 수 있습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_LONG).show() } })
+                                onFallback = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; showSessionRecoveryEnd = true } })
                         } else if (com.example.safepath_test1.session.JourneyEndAuth.isAvailable) showJourneyEnd = true
                         else showSessionRecoveryEnd = true
                     }, enabled = !testJourneyPending && !endAuthenticating) { Text("안전귀가 종료") }
@@ -723,8 +740,13 @@ fun HomeScreen(
         if (showSessionRecoveryEnd) androidx.compose.material3.AlertDialog(
             onDismissRequest = { showSessionRecoveryEnd = false },
             title = { Text("귀가 세션 종료") },
-            text = { Text("앱이 다시 시작되어 이 기기의 종료 인증 정보가 사라졌습니다. 로그인된 계정으로 서버 세션을 종료할까요?") },
-            confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending, onClick = { showSessionRecoveryEnd = false; onTestJourneyEnd() }) { Text("종료") } },
+            text = { Text("기기 화면 잠금을 확인한 뒤 안전귀가를 종료할 수 있어요.") },
+            confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending, onClick = {
+                val manager = context.getSystemService(android.app.KeyguardManager::class.java)
+                val intent = manager?.createConfirmDeviceCredentialIntent("안전귀가 종료", "화면 잠금을 확인해 주세요")
+                if (intent == null) Toast.makeText(context, "기기 설정에서 화면 잠금을 먼저 설정해 주세요.", Toast.LENGTH_LONG).show()
+                else { showSessionRecoveryEnd = false; recoveryLauncher.launch(intent) }
+            }) { Text("본인 확인") } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { showSessionRecoveryEnd = false }) { Text("취소") } },
         )
         if (showJourneyEnd) androidx.compose.material3.AlertDialog(
@@ -755,5 +777,6 @@ fun HomeScreen(
             onRecenter = { recenterToken++ },
             onToggleSafetyFacilities = { showSafetyFacilities = !showSafetyFacilities },
         )
+        SnackbarHost(facilitySnackbar, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 152.dp))
     }
 }

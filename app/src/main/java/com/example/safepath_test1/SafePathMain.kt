@@ -71,6 +71,13 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     var releasePending by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
+    val notificationOpenProtection by com.example.safepath_test1.api.NotificationNavigation.openProtection.collectAsState()
+    LaunchedEffect(notificationOpenProtection) {
+        if (notificationOpenProtection) {
+            selectedTab = SafePathTab.Guardian.name
+            com.example.safepath_test1.api.NotificationNavigation.consume()
+        }
+    }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val uid = FirebaseAuth.getInstance().currentUser?.uid
     val sessions = remember(context) { context.getSharedPreferences("backend_sessions", android.content.Context.MODE_PRIVATE) }
@@ -84,7 +91,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
             val profile = AccountRepository(context).profile()
             val rows = backendRepository.guardians()
             if (FirebaseAuth.getInstance().currentUser?.uid == uid) {
-                com.example.safepath_test1.friends.cacheServerFriends(context, uid, rows.filter {
+                com.example.safepath_test1.friends.cacheServerGuardians(context, uid, rows.filter {
                     it.userId == profile.userId && it.status == "ACCEPTED"
                 }.map { com.example.safepath_test1.ui.guardian.GuardianItem(it.id.toString(), it.guardianName, "보호자", "") })
             }

@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.safepath_test1.friends.CreatedFriendInvite
 import com.example.safepath_test1.friends.FriendsViewModel
 import com.example.safepath_test1.friends.readServerFriends
+import com.example.safepath_test1.friends.readServerGuardians
 import com.example.safepath_test1.ui.components.PageHeader
 import com.example.safepath_test1.ui.theme.*
 import kotlinx.coroutines.delay
@@ -152,6 +153,8 @@ fun FriendsScreen(
         }
     }
     var disconnect by remember { mutableStateOf<GuardianItem?>(null) }
+    var guardianCandidate by remember { mutableStateOf<GuardianItem?>(null) }
+    var guardianCandidateId by rememberSaveable { mutableStateOf("") }
     val matches =
         remember(displayedGuardians, appliedQuery) {
             val text = appliedQuery.trim()
@@ -339,6 +342,11 @@ fun FriendsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
+                        if (friendState.friends.any { it.id == friend.id }) {
+                            IconButton(onClick = { guardianCandidateId = ""; guardianCandidate = friend }, enabled = !backendState.busy) {
+                                Icon(Icons.Default.Shield, "${friend.name} 보호자 요청", tint = SafeBlue)
+                            }
+                        }
                     }
                 }
             }
@@ -440,6 +448,25 @@ fun FriendsScreen(
                 }
             }
         }
+    guardianCandidate?.let { target ->
+        AlertDialog(
+            onDismissRequest = { guardianCandidate = null },
+            title = { Text("보호자 요청") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("${target.name}님에게 확인한 SafePath 회원 ID를 입력해 주세요. 상대방이 수락하면 보호자로 지정됩니다.")
+                    Text("카카오톡 친구 정보만으로 회원 ID를 확인할 수 없어요. 입력한 ID의 상대에게 요청이 전송됩니다.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(value = guardianCandidateId, onValueChange = { guardianCandidateId = it.filter(Char::isDigit) }, label = { Text("보호자 회원 ID") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                }
+            },
+            confirmButton = { TextButton(enabled = !backendState.busy && (guardianCandidateId.toLongOrNull() ?: 0L) > 0, onClick = {
+                val id = guardianCandidateId.toLongOrNull() ?: return@TextButton
+                guardianCandidate = null
+                backendViewModel.requestGuardian(id)
+            }) { Text("요청") } },
+            dismissButton = { TextButton(onClick = { guardianCandidate = null }) { Text("취소") } },
+        )
+    }
     disconnect?.let { target ->
         AlertDialog(
             onDismissRequest = { disconnect = null },
@@ -614,7 +641,7 @@ fun DepartureScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val guardians = remember { readServerFriends(context) }
+    val guardians = remember { readServerGuardians(context) }
     var selected by rememberSaveable { mutableStateOf(listOf<String>()) }
     var pin by remember { mutableStateOf("") }
     var useBiometric by remember { mutableStateOf(com.example.safepath_test1.session.BiometricSessionSigner.isAvailable(context)) }
@@ -686,6 +713,12 @@ fun DepartureScreen(
                             selected = if (checked) selected + friend.id else selected - friend.id
                         },
                     )
+                }
+            }
+            if (com.example.safepath_test1.session.BiometricSessionSigner.isAvailable(context)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("생체인증 사용", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    Switch(checked = useBiometric, onCheckedChange = { useBiometric = it })
                 }
             }
             if (useBiometric) {
@@ -763,7 +796,8 @@ fun DepartureScreen(
                     if (useBiometric && activity != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                         val alias = runCatching { com.example.safepath_test1.session.BiometricSessionSigner.createKey(context).keyAlias }.getOrNull()
                         if (alias == null) {
-                            android.widget.Toast.makeText(context, "생체인증을 시작할 수 없습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_LONG).show()
+                            useBiometric = false
+                            android.widget.Toast.makeText(context, "생체인증을 사용할 수 없어 종료 비밀번호로 진행해 주세요.", android.widget.Toast.LENGTH_LONG).show()
                         } else {
                             authenticating = true
                             val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
@@ -777,7 +811,8 @@ fun DepartureScreen(
                                     runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(alias) }
                                     if (authenticationScopeActive.get()) {
                                         authenticating = false
-                                        android.widget.Toast.makeText(context, "생체인증 후 시작할 수 있습니다.", android.widget.Toast.LENGTH_LONG).show()
+                                        useBiometric = false
+                                        android.widget.Toast.makeText(context, "종료 비밀번호로 진행할 수 있어요.", android.widget.Toast.LENGTH_LONG).show()
                                     }
                                 })
                         }

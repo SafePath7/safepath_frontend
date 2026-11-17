@@ -12,7 +12,7 @@ import com.example.safepath_test1.api.RiskEventDetail
 import com.example.safepath_test1.api.RiskMedia
 import com.example.safepath_test1.api.RiskEventRequest
 import com.example.safepath_test1.api.accountErrorMessage
-import com.example.safepath_test1.friends.cacheServerFriends
+import com.example.safepath_test1.friends.cacheServerGuardians
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -75,7 +75,7 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
             catch (error: CancellationException) { throw error }
             catch (_: Exception) { false }
         check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-        cacheServerFriends(getApplication(), uid, registrations.filter {
+        cacheServerGuardians(getApplication(), uid, registrations.filter {
             it.userId == account.userId && it.status == "ACCEPTED"
         }.map { GuardianItem(it.id.toString(), it.guardianName, "보호자", "") })
         var sessionId = sessions.getString(uid, null)
@@ -111,6 +111,9 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     fun refresh() = perform { load(it) }
     fun changeGuardianInput(value: String) { mutableState.update { it.copy(guardianInput = value.filter(Char::isDigit)) } }
     fun requestGuardian(id: Long) = perform { uid ->
+        if (mutableState.value.rows.any { it.userId == mutableState.value.myId && it.guardianId == id && it.status == "REVOKED" }) {
+            error("해제한 보호자에게 다시 요청하는 기능은 서버에서 아직 지원하지 않아요.")
+        }
         backend.requestGuardian(id)
         load(uid)
         mutableState.update { it.copy(guardianInput = "") }
