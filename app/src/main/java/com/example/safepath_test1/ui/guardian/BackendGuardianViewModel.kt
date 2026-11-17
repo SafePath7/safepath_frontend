@@ -22,6 +22,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
+import okhttp3.MediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,6 +44,7 @@ data class BackendGuardianState(
     val guardianInput: String = "",
     val sessionId: String? = null,
     val notice: String? = null,
+    val isAdmin: Boolean = false,
 )
 
 class BackendGuardianViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,6 +71,9 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     private suspend fun load(uid: String) {
         val account = accounts.profile()
         val registrations = backend.guardians()
+        val isAdmin = try { auth.currentUser?.getIdToken(false)?.await()?.claims?.get("admin") == true }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { false }
         check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
         cacheServerFriends(getApplication(), uid, registrations.filter {
             it.userId == account.userId && it.status == "ACCEPTED"
@@ -78,7 +87,7 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
                 sessionId = null
             }
         }
-        mutableState.update { it.copy(myId = account.userId, rows = registrations, sessionId = sessionId) }
+        mutableState.update { it.copy(myId = account.userId, rows = registrations, sessionId = sessionId, isAdmin = isAdmin) }
     }
 
     private fun perform(action: suspend (String) -> Unit) {
@@ -108,6 +117,7 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     }
     fun respond(id: Long, action: String) = perform { uid -> backend.respond(id, action); load(uid) }
     fun updatePermissions(id: Long, value: GuardianPermissions) = perform { uid -> backend.permissions(id, value); load(uid) }
+    fun suspendGuardian(id: Long) = perform { uid -> backend.suspendGuardian(id); load(uid) }
     fun loadEvents(userId: Long? = null, registrationId: Long? = null) = perform { uid ->
         if (registrationId != null) {
             check(backend.checkPermission(registrationId, "STATUS").allowed) { "위험 기록을 볼 권한이 없습니다." }
@@ -155,6 +165,38 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
             }
         }
         mutableState.update { it.copy(notice = "첨부파일을 저장했습니다.") }
+    }
+    fun uploadMedia(eventId: Long, source: Uri) = perform { uid ->
+        val context = getApplication<Application>()
+        val bytes = withContext(Dispatchers.IO) {
+            val input = context.contentResolver.openInputStream(source) ?: error("첨부파일을 열 수 없습니다.")
+            input.use { stream ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count == -1) break
+                    check(output.size() + count <= 10 * 1024 * 1024) { "첨부파일은 10MB 이하여야 합니다." }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+        }
+        check(bytes.isNotEmpty()) { "빈 파일은 첨부할 수 없습니다." }
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        val mime = context.contentResolver.getType(source) ?: "application/octet-stream"
+        val type = when { mime.startsWith("image/") -> "IMAGE"; mime.startsWith("audio/") -> "AUDIO"; else -> "FILE" }
+        val extension = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+        val name = if (extension.isNullOrBlank()) "attachment" else "attachment.$extension"
+        val part = MultipartBody.Part.createFormData("file", name, RequestBody.create(MediaType.parse(mime), bytes))
+        val uploaded = backend.uploadRiskMedia(eventId, part, RequestBody.create(MediaType.parse("text/plain"), type))
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        mutableState.update { it.copy(eventMedia = it.eventMedia + uploaded, notice = "첨부파일을 업로드했습니다.") }
+    }
+    fun deleteMedia(eventId: Long, mediaId: Long) = perform { uid ->
+        backend.deleteRiskMedia(eventId, mediaId)
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        mutableState.update { it.copy(eventMedia = it.eventMedia.filterNot { media -> media.id == mediaId }, notice = "첨부파일을 삭제했습니다.") }
     }
     override fun onCleared() {
         auth.removeAuthStateListener(listener)

@@ -46,6 +46,7 @@ class BackendRepository(context: Context) {
     suspend fun guardians() = backend.request { api.guardians(it) }
     suspend fun requestGuardian(id: Long) = backend.request { api.requestGuardian(it, GuardianRequest(id)) }
     suspend fun respond(id: Long, action: String) = backend.request { api.respond(it, id, action) }
+    suspend fun suspendGuardian(id: Long) = backend.request { api.respond(it, id, "suspend") }
     suspend fun permissions(id: Long, value: GuardianPermissions) = backend.request { api.permissions(it, id, value) }
     suspend fun checkPermission(id: Long, type: String) = backend.request { api.checkPermission(it, id, type) }
     suspend fun registerToken(token: String) = backend.request { api.registerToken(it, FcmTokenBody(token)) }

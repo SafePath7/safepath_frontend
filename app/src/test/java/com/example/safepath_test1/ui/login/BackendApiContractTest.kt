@@ -8,8 +8,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import okhttp3.MediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 
 class BackendApiContractTest {
+    @Test fun adminRequestsMatchBackendContract() = runBlocking {
+        val requests = mutableListOf<List<String>>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { exchange ->
+            requests.add(listOf(exchange.requestMethod, exchange.requestURI.toString(), exchange.requestBody.bufferedReader().readText(), exchange.requestHeaders.getFirst("Authorization").orEmpty()))
+            val body = if (exchange.requestMethod == "POST") "{\"id\":9,\"eventId\":4,\"mediaType\":\"IMAGE\",\"fileName\":\"photo.png\",\"uploadedAt\":\"2026-01-01T00:00:00Z\"}" else if (exchange.requestMethod == "PATCH") "{\"id\":3,\"userId\":1,\"guardianId\":2,\"status\":\"SUSPENDED\"}" else ""
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(if (bytes.isEmpty()) 204 else 200, if (bytes.isEmpty()) -1 else bytes.size.toLong())
+            if (bytes.isEmpty()) exchange.close() else exchange.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val api = Retrofit.Builder().baseUrl("http://127.0.0.1:${server.address.port}/").addConverterFactory(GsonConverterFactory.create()).build().create(BackendApi::class.java)
+            val auth = "Bearer test-token"
+            assertEquals("SUSPENDED", api.respond(auth, 3, "suspend").status)
+            val file = MultipartBody.Part.createFormData("file", "photo.png", RequestBody.create(MediaType.parse("image/png"), byteArrayOf(1, 2, 3)))
+            assertEquals(9L, api.uploadRiskMedia(auth, 4, file, RequestBody.create(MediaType.parse("text/plain"), "IMAGE")).id)
+            api.deleteRiskMedia(auth, 4, 9)
+            assertEquals(listOf("/api/guardian-registrations/3/suspend", "/api/risk-events/4/medias", "/api/risk-events/4/medias/9"), requests.map { it[1] })
+            assertTrue(requests[1][2].contains("name=\"file\""))
+            assertTrue(requests[1][2].contains("name=\"mediaType\""))
+            assertTrue(requests.all { it[3] == auth })
+        } finally { server.stop(0) }
+    }
     @Test fun riskEventAndMediaRequestsMatchBackend() = runBlocking {
         val requests = mutableListOf<List<String>>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)

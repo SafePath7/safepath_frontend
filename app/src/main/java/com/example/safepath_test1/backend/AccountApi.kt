@@ -45,8 +45,10 @@ class AccountRepository(context: Context) {
 fun accountErrorMessage(error: Throwable): String = when ((error as? HttpException)?.code()) {
     400 -> "입력한 정보를 확인해 주세요."
     401 -> "로그인이 만료되었습니다. 다시 로그인해 주세요."
+    403 -> "이 작업을 수행할 권한이 없습니다."
     404 -> "등록된 회원정보가 없습니다."
     409 -> "이미 사용 중인 정보이거나 연관 정보가 있어 처리할 수 없습니다."
+    413 -> "첨부파일의 크기가 너무 큽니다."
     422 -> "Google 계정의 이메일과 인증된 전화번호 연결 상태를 확인해 주세요."
     503 -> "서버에서 이 기능을 아직 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."
     else -> when (error) {

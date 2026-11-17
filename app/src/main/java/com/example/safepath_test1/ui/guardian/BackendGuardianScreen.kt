@@ -39,6 +39,14 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}
     var reportDescription by remember { mutableStateOf<String?>(null) }
     var confirmResolve by remember { mutableStateOf(false) }
     var pendingDownload by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var pendingUpload by remember { mutableStateOf<Long?>(null) }
+    var deleteMedia by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var suspendRegistration by remember { mutableStateOf<Long?>(null) }
+    val uploadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val eventId = pendingUpload
+        pendingUpload = null
+        if (uri != null && eventId != null) viewModel.uploadMedia(eventId, uri)
+    }
     val downloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val pending = pendingDownload
         pendingDownload = null
@@ -110,6 +118,7 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}
                             if (!owner && row.status == "ACCEPTED" && row.canViewStatus) TextButton(enabled = !busy, onClick = { viewModel.loadEvents(row.userId, row.id) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("위험 기록") }
                             TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "revoke") }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (row.status == "PENDING") "요청 취소" else "관계 해제", color = TextMuted) }
                         }
+                        if (state.isAdmin) TextButton(enabled = !busy, onClick = { suspendRegistration = row.id }, modifier = Modifier.padding(start = 58.dp)) { Text("관리자: 관계 중지") }
                     }
                 }
             }
@@ -140,11 +149,15 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}
                 Text(event.detectedAt)
                 Text("첨부 ${state.eventMedia.size}개")
                 state.eventMedia.forEach { media ->
-                    TextButton(enabled = !busy, onClick = {
-                        pendingDownload = event.id to media.id
-                        downloadLauncher.launch(media.fileName?.substringAfterLast('/')?.substringAfterLast('\\')?.takeIf { it.isNotBlank() } ?: "attachment")
-                    }) { Text("${media.mediaType}: ${media.fileName ?: "파일"} 저장") }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(enabled = !busy, modifier = Modifier.weight(1f), onClick = {
+                            pendingDownload = event.id to media.id
+                            downloadLauncher.launch(media.fileName?.substringAfterLast('/')?.substringAfterLast('\\')?.takeIf { it.isNotBlank() } ?: "attachment")
+                        }) { Text("${media.mediaType}: ${media.fileName ?: "파일"} 저장") }
+                        if (state.isAdmin) TextButton(enabled = !busy, onClick = { deleteMedia = event.id to media.id }) { Text("삭제") }
+                    }
                 }
+                if (state.isAdmin) TextButton(enabled = !busy, onClick = { pendingUpload = event.id; uploadLauncher.launch(arrayOf("image/*", "audio/*")) }) { Text("관리자: 사진·음성 첨부") }
                 if (event.userId == myId && event.status != "RESOLVED") {
                     TextButton(enabled = !busy, onClick = { confirmResolve = true }) { Text("해결 완료로 표시") }
                 }
@@ -152,6 +165,16 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}
                 state.notice?.let { Text(it) }
             }
         }, confirmButton = { TextButton(onClick = viewModel::dismissEventDetail) { Text("닫기") } })
+    }
+    deleteMedia?.let { target ->
+        AlertDialog(onDismissRequest = { deleteMedia = null }, title = { Text("첨부파일을 삭제할까요?") }, text = { Text("서버에 저장된 첨부파일이 삭제됩니다.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = { deleteMedia = null; viewModel.deleteMedia(target.first, target.second) }) { Text("삭제") } },
+            dismissButton = { TextButton(onClick = { deleteMedia = null }) { Text("취소") } })
+    }
+    suspendRegistration?.let { id ->
+        AlertDialog(onDismissRequest = { suspendRegistration = null }, title = { Text("보호 관계를 중지할까요?") }, text = { Text("관리자 권한으로 이 보호 관계를 중지합니다.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = { suspendRegistration = null; viewModel.suspendGuardian(id) }) { Text("중지") } },
+            dismissButton = { TextButton(onClick = { suspendRegistration = null }) { Text("취소") } })
     }
     if (confirmResolve) AlertDialog(
         onDismissRequest = { confirmResolve = false }, title = { Text("해결 완료로 표시할까요?") },
