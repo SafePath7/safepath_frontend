@@ -24,8 +24,16 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier) {
     val events = state.events
     val guardianId = state.guardianInput
     var editing by remember { mutableStateOf<GuardianRegistration?>(null) }
+    var confirmSessionEnd by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().statusBarsPadding().padding(20.dp)) {
         Text("보호자 관리", style = MaterialTheme.typography.headlineMedium)
+        Text("서버 귀가 세션: ${if (state.sessionId == null) "없음" else "진행 중"}")
+        Text("서버 세션은 현재 위치나 경로를 공유하지 않습니다.", style = MaterialTheme.typography.bodySmall)
+        if (state.sessionId == null) {
+            TextButton(enabled = !busy && myId != null, onClick = viewModel::startSession) { Text("서버 귀가 세션 시작") }
+        } else {
+            TextButton(enabled = !busy, onClick = { confirmSessionEnd = true }) { Text("서버 귀가 세션 종료") }
+        }
         Text("내 회원 ID: ${myId ?: "확인 중"}", modifier = Modifier.padding(vertical = 8.dp))
         Text("상대방의 회원 ID를 입력해 보호자를 요청하세요. 전화번호 검색은 서버에서 아직 제공하지 않습니다.")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -57,12 +65,30 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+    if (confirmSessionEnd) AlertDialog(
+        onDismissRequest = { confirmSessionEnd = false },
+        title = { Text("서버 귀가 세션을 종료할까요?") },
+        text = { Text("서버에 저장된 진행 중 세션을 종료합니다.") },
+        confirmButton = { TextButton(onClick = { confirmSessionEnd = false; viewModel.endSession() }) { Text("종료") } },
+        dismissButton = { TextButton(onClick = { confirmSessionEnd = false }) { Text("취소") } },
+    )
     events?.let { list ->
         AlertDialog(onDismissRequest = viewModel::dismissEvents, title = { Text("위험 기록") }, text = {
             LazyColumn { if (list.isEmpty()) item { Text("기록이 없습니다.") }; items(list, key = { it.id }) { event ->
-                Column(Modifier.padding(vertical = 8.dp)) { Text("${event.eventType} · ${event.status}"); Text(event.description); Text(event.detectedAt) }
+                Column(Modifier.padding(vertical = 8.dp)) { Text("${event.eventType} · ${event.status}"); Text(event.description); Text(event.detectedAt); TextButton(enabled = !busy, onClick = { viewModel.loadEventDetail(event.id) }) { Text("상세 및 첨부 목록") } }
             } }
         }, confirmButton = { TextButton(onClick = viewModel::dismissEvents) { Text("닫기") } })
+    }
+    state.eventDetail?.let { event ->
+        AlertDialog(onDismissRequest = viewModel::dismissEventDetail, title = { Text("위험 기록 상세") }, text = {
+            Column {
+                Text("${event.eventType} · ${event.status}")
+                Text(event.description)
+                Text(event.detectedAt)
+                Text("첨부 ${state.eventMedia.size}개")
+                state.eventMedia.forEach { Text("${it.mediaType}: ${it.fileName ?: "파일"}") }
+            }
+        }, confirmButton = { TextButton(onClick = viewModel::dismissEventDetail) { Text("닫기") } })
     }
     editing?.let { row ->
         var location by remember(row.id) { mutableStateOf(row.canViewLocation) }

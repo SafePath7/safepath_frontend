@@ -37,7 +37,8 @@ internal fun ProfileDetectionSettings(hasLocationPermission: Boolean, onSettings
     var showTimeout by rememberSaveable { mutableStateOf(false) }
     var timeoutText by rememberSaveable { mutableStateOf("") }
     var timeoutError by remember { mutableStateOf(false) }
-    if (showTimeout) AlertDialog(
+    if (showTimeout) {
+    AlertDialog(
         onDismissRequest = { showTimeout = false },
         title = { Text("응답 대기 시간") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -54,6 +55,7 @@ internal fun ProfileDetectionSettings(hasLocationPermission: Boolean, onSettings
         }) { Text("저장") } },
         dismissButton = { TextButton(onClick = { showTimeout = false }) { Text("취소") } },
     )
+    }
         Text("AI 위험 감지", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Surface(
             color = Color.White,
@@ -94,7 +96,7 @@ internal fun ProfileDetectionSettings(hasLocationPermission: Boolean, onSettings
                 }
             }
         }
-        Text("다음 귀가에 사용할 설정을 이 기기에 저장합니다. 실제 AI 감지는 서버 연결 후 사용할 수 있어요.", color = TextMuted, fontSize = 12.sp)
+        Text("설정은 이 기기에만 저장됩니다. 실제 AI 감지는 아직 제공되지 않습니다.", color = TextMuted, fontSize = 12.sp)
         Text("귀가 설정", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Surface(
             color = Color.White,

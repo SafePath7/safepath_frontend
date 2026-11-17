@@ -126,11 +126,20 @@ fun HomeScreen(
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val routeTypes = remember { listOf(RouteType.Recommended, RouteType.Safe, RouteType.Shortest) }
     val routePagerState = rememberPagerState(initialPage = 0, pageCount = { routeTypes.size })
-    val routeType = routeTypes[routePagerState.settledPage].name
+    val configuration = LocalConfiguration.current
+    val tallScreen = configuration.screenWidthDp > 0 && configuration.screenHeightDp >= 700 &&
+        configuration.screenHeightDp.toFloat() / configuration.screenWidthDp >= 1.7f
+    var selectedRouteIndex by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(tallScreen) {
+        if (tallScreen) selectedRouteIndex = routePagerState.settledPage
+        else routePagerState.scrollToPage(selectedRouteIndex)
+    }
+    val routeType = routeTypes[if (tallScreen) selectedRouteIndex else routePagerState.settledPage].name
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current.density
-    val maxPanelHeight = (LocalConfiguration.current.screenHeightDp - 220).coerceIn(154, 320).toFloat()
+    val maxPanelHeight = (configuration.screenHeightDp - 220).coerceIn(154, if (tallScreen) 560 else 320).toFloat()
     var routePanelHeight by rememberSaveable { mutableStateOf(320f) }
+    LaunchedEffect(tallScreen) { routePanelHeight = maxPanelHeight }
     val panelDrag = rememberDraggableState { delta ->
         routePanelHeight = (routePanelHeight.coerceIn(154f, maxPanelHeight) - delta / density).coerceIn(154f, maxPanelHeight)
     }
@@ -167,7 +176,13 @@ fun HomeScreen(
                 PlaceSelection("현재 위치", currentLocation.latitude, currentLocation.longitude)
             )
     }
-    BackHandler(enabled = stage != "search") { stage = "search" }
+    val returnToSearch = {
+        if (stage == "routes") onDestinationChanged(PlaceSelection())
+        isDestinationSearchOpen = false
+        keyboardController?.hide()
+        stage = "search"
+    }
+    BackHandler(enabled = stage != "search") { returnToSearch() }
     val multiRouteResult = uiState.routes
     val isRouteLoading = uiState.isRouteLoading
     val routeError = uiState.routeError
@@ -371,7 +386,7 @@ fun HomeScreen(
                 shadowElevation = 3.dp,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.IconButton(onClick = { stage = "search" }) {
+                    androidx.compose.material3.IconButton(onClick = returnToSearch) {
                         Icon(Icons.Default.Close, "목적지 입력으로 돌아가기")
                     }
                     Text(
@@ -504,14 +519,24 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text("경로 추천", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                if (routePanelHeight > 154f)
-                                    Text("좌우로 넘겨 선택 · ${routePagerState.settledPage + 1}/3", color = TextMuted, fontSize = 11.sp)
                             }
                         }
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            if (tallScreen) {
+                                routeTypes.forEachIndexed { index, type ->
+                                    val route = when (type) {
+                                        RouteType.Safe -> multiRouteResult?.safeRoute
+                                        RouteType.Recommended -> multiRouteResult?.recommendedRoute
+                                        RouteType.Shortest -> multiRouteResult?.shortestRoute
+                                    }
+                                    RouteOptionCard(type, route, selected = selectedRouteIndex == index, fastest = multiRouteResult?.shortestRoute) {
+                                        selectedRouteIndex = index
+                                    }
+                                }
+                            } else {
                             HorizontalPager(
                                 state = routePagerState,
                                 pageSpacing = 8.dp,
@@ -550,12 +575,13 @@ fun HomeScreen(
                                     }
                                 }
                             }
+                            }
                         }
                         }
                         Button(
                             shape = MaterialTheme.shapes.small,
                             onClick = { selectedTestRoute = activeRoute?.geoJsonLineString; stage = "departure" },
-                            enabled = activeRoute != null && !routePagerState.isScrollInProgress,
+                            enabled = activeRoute != null && (tallScreen || !routePagerState.isScrollInProgress),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         ) {
                             Text("이 경로로 출발 준비")

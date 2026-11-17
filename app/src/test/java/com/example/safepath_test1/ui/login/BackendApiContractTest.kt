@@ -10,6 +10,40 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 class BackendApiContractTest {
+    @Test fun riskEventAndMediaRequestsMatchBackend() = runBlocking {
+        val requests = mutableListOf<List<String>>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { exchange ->
+            val body = exchange.requestBody.bufferedReader().readText()
+            requests.add(listOf(exchange.requestMethod, exchange.requestURI.toString(), body, exchange.requestHeaders.getFirst("Authorization").orEmpty()))
+            val path = exchange.requestURI.path
+            val json = when {
+                path.endsWith("/permissions/check") -> "{\"allowed\":true}"
+                path.endsWith("/medias") && exchange.requestURI.query == null -> "[]"
+                path.endsWith("/medias") -> "file contents"
+                path.endsWith("/status") || (path == "/api/risk-events" && exchange.requestMethod == "POST") -> "{\"id\":4,\"sessionId\":\"s\",\"eventType\":\"SOS\",\"description\":\"help\",\"status\":\"OPEN\",\"detectedAt\":\"2026-01-01T00:00:00Z\"}"
+                else -> "{\"id\":4,\"userId\":2,\"sessionId\":\"s\",\"eventType\":\"SOS\",\"description\":\"help\",\"status\":\"OPEN\",\"detectedAt\":\"2026-01-01T00:00:00Z\"}"
+            }.toByteArray()
+            exchange.sendResponseHeaders(200, json.size.toLong())
+            exchange.responseBody.use { it.write(json) }
+        }
+        server.start()
+        try {
+            val api = Retrofit.Builder().baseUrl("http://127.0.0.1:${server.address.port}/")
+                .addConverterFactory(GsonConverterFactory.create()).build().create(BackendApi::class.java)
+            val auth = "Bearer test-token"
+            assertTrue(api.checkPermission(auth, 3, "STATUS").allowed)
+            assertEquals(4L, api.riskEvent(auth, 4).id)
+            api.createRiskEvent(auth, RiskEventRequest("s", "SOS", "help", "2026-01-01T00:00:00Z"))
+            api.updateRiskEventStatus(auth, 4, RiskEventStatusRequest("RESOLVED"))
+            assertTrue(api.riskMedia(auth, 4).isEmpty())
+            api.downloadRiskMedia(auth, 4, 9).use { assertEquals("file contents", it.string()) }
+            assertEquals("/api/guardian-registrations/3/permissions/check?permissionType=STATUS", requests[0][1])
+            assertEquals("/api/risk-events/4/medias?mediaId=9", requests[5][1])
+            assertEquals("{\"status\":\"RESOLVED\"}", requests[3][2])
+            assertTrue(requests.all { it[3] == auth })
+        } finally { server.stop(0) }
+    }
     @Test fun guardianAndNotificationRequestsMatchBackend() = runBlocking {
         val requests = mutableListOf<List<String>>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)

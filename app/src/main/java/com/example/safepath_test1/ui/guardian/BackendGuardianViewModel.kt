@@ -8,6 +8,7 @@ import com.example.safepath_test1.api.BackendRepository
 import com.example.safepath_test1.api.GuardianPermissions
 import com.example.safepath_test1.api.GuardianRegistration
 import com.example.safepath_test1.api.RiskEventDetail
+import com.example.safepath_test1.api.RiskMedia
 import com.example.safepath_test1.api.accountErrorMessage
 import com.example.safepath_test1.friends.cacheServerFriends
 import com.google.firebase.auth.FirebaseAuth
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 data class BackendGuardianState(
     val rows: List<GuardianRegistration> = emptyList(),
@@ -24,7 +26,10 @@ data class BackendGuardianState(
     val busy: Boolean = false,
     val error: String? = null,
     val events: List<RiskEventDetail>? = null,
+    val eventDetail: RiskEventDetail? = null,
+    val eventMedia: List<RiskMedia> = emptyList(),
     val guardianInput: String = "",
+    val sessionId: String? = null,
 )
 
 class BackendGuardianViewModel(application: Application) : AndroidViewModel(application) {
@@ -35,6 +40,7 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     val state = mutableState.asStateFlow()
     private var job: Job? = null
     private var accountUid: String? = null
+    private val sessions = application.getSharedPreferences("backend_sessions", Application.MODE_PRIVATE)
     private val listener = FirebaseAuth.AuthStateListener { firebase ->
         val uid = firebase.currentUser?.uid
         if (uid != accountUid) {
@@ -54,7 +60,16 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
         cacheServerFriends(getApplication(), uid, registrations.filter {
             it.userId == account.userId && it.status == "ACCEPTED"
         }.map { GuardianItem(it.id.toString(), it.guardianName, "보호자", "") })
-        mutableState.update { it.copy(myId = account.userId, rows = registrations) }
+        var sessionId = sessions.getString(uid, null)
+        if (sessionId != null) {
+            try { backend.sessionStatus(sessionId) }
+            catch (error: HttpException) {
+                if (error.code() != 404) throw error
+                sessions.edit().remove(uid).apply()
+                sessionId = null
+            }
+        }
+        mutableState.update { it.copy(myId = account.userId, rows = registrations, sessionId = sessionId) }
     }
 
     private fun perform(action: suspend (String) -> Unit) {
@@ -90,6 +105,30 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
         mutableState.update { it.copy(events = events) }
     }
     fun dismissEvents() { mutableState.update { it.copy(events = null) } }
+    fun loadEventDetail(id: Long) = perform { uid ->
+        val event = backend.riskEvent(id)
+        val media = backend.riskMedia(id)
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        mutableState.update { it.copy(eventDetail = event, eventMedia = media) }
+    }
+    fun dismissEventDetail() { mutableState.update { it.copy(eventDetail = null, eventMedia = emptyList()) } }
+    fun startSession() = perform { uid ->
+        val session = backend.startSession()
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        if (!sessions.edit().putString(uid, session.id).commit()) {
+            runCatching { backend.endSession(session.id) }
+            error("세션을 기기에 저장하지 못했습니다. 서버 상태를 확인해 주세요.")
+        }
+        mutableState.update { it.copy(sessionId = session.id) }
+    }
+    fun endSession() = perform { uid ->
+        val id = sessions.getString(uid, null) ?: return@perform
+        try { backend.endSession(id) }
+        catch (error: HttpException) { if (error.code() != 404) throw error }
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        sessions.edit().remove(uid).apply()
+        mutableState.update { it.copy(sessionId = null) }
+    }
 
     override fun onCleared() {
         auth.removeAuthStateListener(listener)

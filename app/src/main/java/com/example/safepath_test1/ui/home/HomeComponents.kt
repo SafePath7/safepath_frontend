@@ -592,28 +592,6 @@ internal fun RouteOptionCard(
                 val extraMeters = route.distanceMeters-fastest.distanceMeters
                 Text("총 ${route.distanceMeters.toInt()}m · 가장 빠른 경로 대비 ${if(extraSeconds>=0) "+" else ""}${kotlin.math.ceil(extraSeconds/60).toInt()}분 / ${if(extraMeters>=0) "+" else ""}${extraMeters.toInt()}m", color=TextMuted, fontSize=10.sp)
             }
-            route?.assessment?.let { assessment ->
-                Text(when(assessment.status) {
-                    com.example.safepath_test1.location.AssessmentStatus.NORMAL -> "평가 가능 · 임시 가중치"
-                    com.example.safepath_test1.location.AssessmentStatus.PARTIAL -> "부분 평가 · 자료 누락 있음"
-                    else -> "안전도 판단 불가 · 가장 빠른 경로 대체 제공"
-                }, color = TextMuted, fontSize = 10.sp)
-                Text(assessment.datasets.filter { it.availability != com.example.safepath_test1.location.DataAvailability.AVAILABLE }
-                    .joinToString(" · ") { "${it.type}: ${it.detail ?: it.availability}" }, color = TextMuted, fontSize = 10.sp)
-            }
-            route?.safetyMetrics?.let { metrics ->
-                Text("시설 인접 구간 ${(metrics.coveredRatio * 100).toInt()}% · 최대 시설 공백 ${metrics.longestUncoveredMeters.toInt()}m", color = TextMuted, fontSize = 10.sp)
-            }
-            Text("공공시설 자료 기준 · 실제 안전 보장 아님", color = TextMuted, fontSize = 10.sp)
-            route?.routeWarnings?.takeIf { it.isNotEmpty() }?.let {
-                Text(it.joinToString(" · "), color = TextMuted, fontSize = 10.sp)
-            }
-            Text(
-                route?.let { "CCTV ${it.cctvCount}곳 · 가로등 ${it.streetlightCount}곳" } ?: "시설 분석 대기 중",
-                color = TextMuted,
-                fontSize = 10.sp,
-                lineHeight = 13.sp,
-            )
         }
     }
 }

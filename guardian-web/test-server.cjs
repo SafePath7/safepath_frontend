@@ -79,7 +79,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { clearTimeout(timeout); clients.delete(ws); });
   ws.on('error', () => clients.delete(ws));
 });
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, process.env.SAFEPATH_TEST_HOST || '0.0.0.0', () => {
   const addresses = Object.values(os.networkInterfaces()).flat().filter(item => item && item.family === 'IPv4' && !item.internal).map(item => item.address);
   console.log('개인 네트워크 간이 테스트 전용. 서버 종료 시 모든 데이터가 삭제됩니다.');
   console.log(`앱 설정 SAFEPATH_TEST_URL=http://<PC Wi-Fi IP>:${port}/`);
