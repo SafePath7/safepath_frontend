@@ -187,7 +187,15 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                 )
             SafePathTab.Friends ->
                 if (showGuardianManagement) com.example.safepath_test1.ui.guardian.BackendGuardianScreen(modifier = Modifier.padding(bottom = 100.dp), onBack = { showGuardianManagement = false })
-                else com.example.safepath_test1.ui.guardian.FriendsScreen(modifier = Modifier.padding(bottom = 100.dp), onManageGuardians = { showGuardianManagement = true })
+                else com.example.safepath_test1.ui.guardian.FriendsScreen(
+                    modifier = Modifier.padding(bottom = 100.dp),
+                    onManageGuardians = { showGuardianManagement = true },
+                    onInviteCreated = { invite ->
+                        com.example.safepath_test1.friends.shareFriendInvite(context, invite)?.let { error ->
+                            android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    },
+                )
             SafePathTab.Guardian -> GuardianScreen(modifier = Modifier.padding(bottom = 100.dp))
             SafePathTab.Profile ->
                 ProfileScreen(
