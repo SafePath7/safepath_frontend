@@ -37,7 +37,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.safepath_test1.location.TestJourneyClient
+import com.example.safepath_test1.session.JourneyEndAuth
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.model.PlaceSelection
 import com.example.safepath_test1.ui.SafePathTab
@@ -72,23 +72,43 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
-    var testJourneyActive by remember { mutableStateOf(TestJourneyClient.active) }
-    var testJourneyPending by remember { mutableStateOf(false) }
-    var testRoute by remember { mutableStateOf<String?>(null) }
-    var testMetadata by remember { mutableStateOf("{}") }
-    val beginTestJourney = { route: String?, metadata: String ->
-        testJourneyPending = true
-        TestJourneyClient.start(context, currentLocation, route, metadata) { success ->
-            testJourneyPending = false
-            testJourneyActive = success
-            if (success) currentLocation?.let { TestJourneyClient.update(context, it) }
-            android.widget.Toast.makeText(context, if (success) "간이 테스트 시작: 웹에서 위치를 확인하세요." else TestJourneyClient.lastError, android.widget.Toast.LENGTH_LONG).show()
+    val uid = FirebaseAuth.getInstance().currentUser?.uid
+    val sessions = remember(context) { context.getSharedPreferences("backend_sessions", android.content.Context.MODE_PRIVATE) }
+    var sessionId by remember(uid) { mutableStateOf(uid?.let { sessions.getString(it, null) }) }
+    var testJourneyPending by remember(uid) { mutableStateOf(sessionId != null) }
+    val testJourneyActive = sessionId != null
+    var showGuardianManagement by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uid) {
+        if (uid == null) return@LaunchedEffect
+        try {
+            val profile = AccountRepository(context).profile()
+            val rows = backendRepository.guardians()
+            if (FirebaseAuth.getInstance().currentUser?.uid == uid) {
+                com.example.safepath_test1.friends.cacheServerFriends(context, uid, rows.filter {
+                    it.userId == profile.userId && it.status == "ACCEPTED"
+                }.map { com.example.safepath_test1.ui.guardian.GuardianItem(it.id.toString(), it.guardianName, "보호자", "") })
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { Log.w("SafePath", "Could not refresh guardians", e) }
+        val saved = sessionId
+        if (saved != null) {
+            try { backendRepository.sessionStatus(saved) }
+            catch (e: retrofit2.HttpException) {
+                if (e.code() == 404) { sessions.edit().remove(uid).apply(); sessionId = null; JourneyEndAuth.clear() }
+                else android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
         }
+        testJourneyPending = false
     }
-    val localNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
-    val localNetworkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) beginTestJourney(testRoute, testMetadata)
-        else android.widget.Toast.makeText(context, "간이 테스트를 위해 근처 기기 접근 권한이 필요합니다.", android.widget.Toast.LENGTH_LONG).show()
+    LaunchedEffect(selectedTab, showGuardianManagement) {
+        if (selectedTab == SafePathTab.Home.name && !testJourneyPending) {
+            val saved = uid?.let { sessions.getString(it, null) }
+            if (saved != sessionId) {
+                sessionId = saved
+                if (saved == null) JourneyEndAuth.clear()
+            }
+        }
     }
     var origin by
         rememberSaveable(stateSaver = placeSelectionSaver) { mutableStateOf(PlaceSelection()) }
@@ -99,13 +119,15 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     LaunchedEffect(permissionRevision) {
         hasLocationPermission = isLocationPermissionGranted(context)
     }
-    AppLocationTracker(context, hasLocationPermission) { location, isUpdate ->
+    AppLocationTracker(context, hasLocationPermission) { location, _ ->
         currentLocation = location
-        if (isUpdate) TestJourneyClient.update(context, location)
     }
 
     val tab = SafePathTab.entries.find { it.name == selectedTab } ?: SafePathTab.Home
-    BackHandler(enabled = tab != SafePathTab.Home) { selectedTab = SafePathTab.Home.name }
+    BackHandler(enabled = tab != SafePathTab.Home) {
+        if (showGuardianManagement && tab == SafePathTab.Friends) showGuardianManagement = false
+        else selectedTab = SafePathTab.Home.name
+    }
 
     Box(
         modifier =
@@ -119,20 +141,37 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                     hasLocationPermission = hasLocationPermission,
                     testJourneyActive = testJourneyActive,
                     testJourneyPending = testJourneyPending,
-                    onTestJourneyStart = { route, originName, destinationName, names, originLat, originLng, destinationLat, destinationLng, routeType ->
-                        testRoute = route
-                        val metadata = org.json.JSONObject().put("origin", originName).put("destination", destinationName).put("recipients", org.json.JSONArray(names)).put("originLat", originLat).put("originLng", originLng).put("destinationLat", destinationLat).put("destinationLng", destinationLng).put("routeType", routeType).toString()
-                        testMetadata = metadata
-                        if (android.os.Build.VERSION.SDK_INT >= 37 && context.getString(com.example.safepath_test1.R.string.safepath_test_url).isNotBlank() && ContextCompat.checkSelfPermission(context, localNetworkPermission) != PackageManager.PERMISSION_GRANTED)
-                            localNetworkLauncher.launch(localNetworkPermission)
-                        else beginTestJourney(route, metadata)
+                    onTestJourneyStart = { _, _, _, _, _, _, _, _, _ ->
+                        testJourneyPending = true
+                        scope.launch {
+                            try {
+                                val user = uid ?: error("로그인이 필요합니다.")
+                                val session = backendRepository.startSession()
+                                check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }
+                                if (!sessions.edit().putString(user, session.id).commit()) {
+                                    runCatching { backendRepository.endSession(session.id) }
+                                    error("세션을 기기에 저장하지 못했습니다.")
+                                }
+                                sessionId = session.id
+                                android.widget.Toast.makeText(context, "귀가 세션이 시작됐습니다. 보호자 위치 공유는 아직 지원되지 않습니다.", android.widget.Toast.LENGTH_LONG).show()
+                            } catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { JourneyEndAuth.clear(); android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
+                            finally { testJourneyPending = false }
+                        }
                     },
                     onTestJourneyEnd = {
                         testJourneyPending = true
-                        TestJourneyClient.end(context) { success ->
-                            testJourneyPending = false
-                            if (success) testJourneyActive = false
-                            android.widget.Toast.makeText(context, if (success) "간이 테스트가 종료되었습니다." else "종료 요청에 실패했습니다. 서버 연결을 확인하세요.", android.widget.Toast.LENGTH_LONG).show()
+                        scope.launch {
+                            try {
+                                val user = uid ?: error("로그인이 필요합니다.")
+                                val id = sessionId ?: error("진행 중인 세션이 없습니다.")
+                                try { backendRepository.endSession(id) } catch (e: retrofit2.HttpException) { if (e.code() != 404) throw e }
+                                check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }
+                                sessions.edit().remove(user).apply(); sessionId = null; JourneyEndAuth.clear()
+                                android.widget.Toast.makeText(context, "귀가 세션이 종료되었습니다.", android.widget.Toast.LENGTH_LONG).show()
+                            } catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
+                            finally { testJourneyPending = false }
                         }
                     },
                     origin = origin,
@@ -147,9 +186,8 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                     modifier = Modifier.fillMaxSize(),
                 )
             SafePathTab.Friends ->
-                com.example.safepath_test1.ui.guardian.BackendGuardianScreen(
-                    modifier = Modifier.padding(bottom = 100.dp),
-                )
+                if (showGuardianManagement) com.example.safepath_test1.ui.guardian.BackendGuardianScreen(modifier = Modifier.padding(bottom = 100.dp), onBack = { showGuardianManagement = false })
+                else com.example.safepath_test1.ui.guardian.FriendsScreen(modifier = Modifier.padding(bottom = 100.dp), onManageGuardians = { showGuardianManagement = true })
             SafePathTab.Guardian -> GuardianScreen(modifier = Modifier.padding(bottom = 100.dp))
             SafePathTab.Profile ->
                 ProfileScreen(

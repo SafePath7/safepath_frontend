@@ -99,6 +99,7 @@ fun FriendsScreen(
     onReject: ((String) -> Unit)? = null,
     onCancel: ((String) -> Unit)? = null,
     onInviteCreated: (CreatedFriendInvite) -> Unit = {},
+    onManageGuardians: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -109,25 +110,36 @@ fun FriendsScreen(
     var showAddFriend by rememberSaveable { mutableStateOf(false) }
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendState by friendsViewModel.uiState.collectAsStateWithLifecycle()
-    val displayedGuardians = (guardians + friendState.friends).distinctBy { it.id }
+    val backendViewModel: BackendGuardianViewModel = viewModel()
+    val backendState by backendViewModel.state.collectAsStateWithLifecycle()
+    val backendRows = backendState.rows
+    val backendIds = backendRows.map { it.id.toString() }.toSet()
+    val backendFriends = backendRows.filter { it.userId == backendState.myId && it.status == "ACCEPTED" }
+        .map { GuardianItem("backend:${it.id}", it.guardianName, "보호자", "") }
+    val displayedGuardians = (guardians + friendState.friends.filterNot { it.id in backendIds } + backendFriends).distinctBy { it.id }
     val displayedReceived =
-        if (friendsViewModel.isConfigured) friendState.received else receivedRequests
-    val displayedSent = if (friendsViewModel.isConfigured) friendState.sent else sentRequests
+        (if (friendsViewModel.isConfigured) friendState.received else receivedRequests) +
+            backendRows.filter { it.guardianId == backendState.myId && it.status == "PENDING" }
+                .map { FriendshipRequest("backend:${it.id}", it.userName) }
+    val displayedSent = (if (friendsViewModel.isConfigured) friendState.sent else sentRequests) +
+        backendRows.filter { it.userId == backendState.myId && it.status == "PENDING" }
+            .map { FriendshipRequest("backend:${it.id}", it.guardianName) }
     val acceptAction: ((String) -> Unit)? =
-        if (friendsViewModel.isConfigured) ({ friendsViewModel.respond(it, "accept") })
-        else onAccept
+        { id -> if (id.startsWith("backend:")) id.removePrefix("backend:").toLongOrNull()?.let { backendViewModel.respond(it, "accept") }
+            else if (friendsViewModel.isConfigured) friendsViewModel.respond(id, "accept") else onAccept?.invoke(id) }
     val rejectAction: ((String) -> Unit)? =
-        if (friendsViewModel.isConfigured) ({ friendsViewModel.respond(it, "reject") })
-        else onReject
+        { id -> if (id.startsWith("backend:")) id.removePrefix("backend:").toLongOrNull()?.let { backendViewModel.respond(it, "reject") }
+            else if (friendsViewModel.isConfigured) friendsViewModel.respond(id, "reject") else onReject?.invoke(id) }
     val cancelAction: ((String) -> Unit)? =
-        if (friendsViewModel.isConfigured) ({ friendsViewModel.respond(it, "cancel") })
-        else onCancel
+        { id -> if (id.startsWith("backend:")) id.removePrefix("backend:").toLongOrNull()?.let { backendViewModel.respond(it, "revoke") }
+            else if (friendsViewModel.isConfigured) friendsViewModel.respond(id, "cancel") else onCancel?.invoke(id) }
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, showAddFriend) {
         if (showAddFriend) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 friendsViewModel.refresh()
+                backendViewModel.refresh()
                 delay(15_000)
             }
         }
@@ -177,6 +189,7 @@ fun FriendsScreen(
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.weight(1f),
             )
+            TextButton(onClick = onManageGuardians) { Text("보호자 관리") }
             IconButton(
                 onClick = {
                     keyboard?.hide()
@@ -261,6 +274,7 @@ fun FriendsScreen(
                 modifier = Modifier.padding(vertical = 8.dp),
             )
         }
+        if (!showAddFriend && backendState.error != null) Text(backendState.error.orEmpty(), color = DangerRed, style = MaterialTheme.typography.bodySmall)
         if (matches.isEmpty()) {
             Column(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -434,6 +448,11 @@ fun FriendsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        if (target.id.startsWith("backend:")) {
+                            target.id.removePrefix("backend:").toLongOrNull()?.let { backendViewModel.respond(it, "revoke") }
+                            disconnect = null
+                            return@TextButton
+                        }
                         if (friendState.friends.any { it.id == target.id }) {
                             friendsViewModel.respond(target.id, "disconnect")
                             disconnect = null
@@ -716,7 +735,7 @@ fun DepartureScreen(
             )
             }
             Text(
-                "현재 로컬 보호자 웹에 경로와 위치를 공유합니다. 앱이 열린 동안 위치가 갱신됩니다.",
+                "귀가 세션을 시작하지만 선택한 보호자에게 위치나 경로가 아직 공유되지 않습니다. 종료 인증은 이 기기에서만 확인합니다.",
                 color = TextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -736,7 +755,7 @@ fun DepartureScreen(
                 val message = request.validationError()
                 if (message != null) android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                 else {
-                    val client = com.example.safepath_test1.location.TestJourneyClient
+                    val client = com.example.safepath_test1.session.JourneyEndAuth
                     client.biometricKeyAlias?.let { runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(it) } }
                     client.biometricKeyAlias = null
                     val names = guardians.filter { it.id in selected }.map { it.name }

@@ -149,6 +149,7 @@ fun HomeScreen(
     var isDestinationSearchOpen by rememberSaveable { mutableStateOf(false) }
     var stage by rememberSaveable { mutableStateOf("search") }
     var showJourneyEnd by remember { mutableStateOf(false) }
+    var showSessionRecoveryEnd by remember { mutableStateOf(false) }
     var endPin by remember { mutableStateOf("") }
     var endPinError by remember { mutableStateOf(false) }
     var endAuthenticating by remember { mutableStateOf(false) }
@@ -278,7 +279,7 @@ fun HomeScreen(
             testJourneyActive = testJourneyActive,
             testJourneyPending = testJourneyPending,
             onTestJourneyStart = { names, pin ->
-                com.example.safepath_test1.location.TestJourneyClient.setEndPin(pin)
+                com.example.safepath_test1.session.JourneyEndAuth.setEndPin(pin)
                 onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
             },
             onTestJourneyEnd = onTestJourneyEnd,
@@ -702,10 +703,10 @@ fun HomeScreen(
         if (stage == "navigation") {
             Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).padding(bottom = 88.dp), shape = RoundedCornerShape(16.dp), color = Color.White) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("안전귀가 이동 중", fontWeight = FontWeight.Bold)
+                    Text("귀가 세션 중 · 위치 공유 안 됨", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Button(onClick = {
                         endPin = ""; endPinError = false
-                        val alias = com.example.safepath_test1.location.TestJourneyClient.biometricKeyAlias
+                        val alias = com.example.safepath_test1.session.JourneyEndAuth.biometricKeyAlias
                         val activity = context as? android.app.Activity
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && alias != null && activity != null) {
                             val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
@@ -713,11 +714,19 @@ fun HomeScreen(
                             endAuthenticationCancellation = com.example.safepath_test1.session.BiometricSessionSigner.signChallenge(activity, alias, challenge,
                                 onSigned = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; onTestJourneyEnd() } },
                                 onFallback = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; android.widget.Toast.makeText(context, "생체인증 후 종료할 수 있습니다. 다시 시도해 주세요.", android.widget.Toast.LENGTH_LONG).show() } })
-                        } else showJourneyEnd = true
+                        } else if (com.example.safepath_test1.session.JourneyEndAuth.isAvailable) showJourneyEnd = true
+                        else showSessionRecoveryEnd = true
                     }, enabled = !testJourneyPending && !endAuthenticating) { Text("안전귀가 종료") }
                 }
             }
         }
+        if (showSessionRecoveryEnd) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSessionRecoveryEnd = false },
+            title = { Text("귀가 세션 종료") },
+            text = { Text("앱이 다시 시작되어 이 기기의 종료 인증 정보가 사라졌습니다. 로그인된 계정으로 서버 세션을 종료할까요?") },
+            confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending, onClick = { showSessionRecoveryEnd = false; onTestJourneyEnd() }) { Text("종료") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { showSessionRecoveryEnd = false }) { Text("취소") } },
+        )
         if (showJourneyEnd) androidx.compose.material3.AlertDialog(
             onDismissRequest = { showJourneyEnd = false },
             title = { Text("안전귀가 종료") },
@@ -732,7 +741,7 @@ fun HomeScreen(
                 )
             },
             confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending && endPin.length == 4, onClick = {
-                if (com.example.safepath_test1.location.TestJourneyClient.verifyEndPin(endPin)) { showJourneyEnd = false; endPin = ""; onTestJourneyEnd() } else endPinError = true
+                if (com.example.safepath_test1.session.JourneyEndAuth.verifyEndPin(endPin)) { showJourneyEnd = false; endPin = ""; onTestJourneyEnd() } else endPinError = true
             }) { Text("종료") } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { showJourneyEnd = false }) { Text("취소") } },
         )

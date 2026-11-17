@@ -1,12 +1,24 @@
 package com.example.safepath_test1.ui.guardian
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.safepath_test1.ui.theme.*
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.safepath_test1.api.*
@@ -14,7 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun BackendGuardianScreen(modifier: Modifier = Modifier) {
+fun BackendGuardianScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     val viewModel: BackendGuardianViewModel = viewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val rows = state.rows
@@ -24,54 +36,95 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier) {
     val events = state.events
     val guardianId = state.guardianInput
     var editing by remember { mutableStateOf<GuardianRegistration?>(null) }
-    var confirmSessionEnd by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxSize().statusBarsPadding().padding(20.dp)) {
-        Text("보호자 관리", style = MaterialTheme.typography.headlineMedium)
-        Text("서버 귀가 세션: ${if (state.sessionId == null) "없음" else "진행 중"}")
-        Text("서버 세션은 현재 위치나 경로를 공유하지 않습니다.", style = MaterialTheme.typography.bodySmall)
-        if (state.sessionId == null) {
-            TextButton(enabled = !busy && myId != null, onClick = viewModel::startSession) { Text("서버 귀가 세션 시작") }
-        } else {
-            TextButton(enabled = !busy, onClick = { confirmSessionEnd = true }) { Text("서버 귀가 세션 종료") }
+    var reportDescription by remember { mutableStateOf<String?>(null) }
+    var confirmResolve by remember { mutableStateOf(false) }
+    var pendingDownload by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    val downloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pending = pendingDownload
+        pendingDownload = null
+        if (uri != null && pending != null) viewModel.downloadMedia(pending.first, pending.second, uri)
+    }
+    Column(
+        modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding().imePadding().padding(horizontal = 20.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로", tint = TextMain) }
+            Text("보호자 관리", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
+            IconButton(enabled = !busy, onClick = viewModel::refresh) { Icon(Icons.Default.Refresh, "새로고침", tint = TextMain) }
         }
-        Text("내 회원 ID: ${myId ?: "확인 중"}", modifier = Modifier.padding(vertical = 8.dp))
-        Text("상대방의 회원 ID를 입력해 보호자를 요청하세요. 전화번호 검색은 서버에서 아직 제공하지 않습니다.")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(guardianId, viewModel::changeGuardianInput, label = { Text("보호자 회원 ID") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), singleLine = true)
-            Button(enabled = !busy && (guardianId.toLongOrNull() ?: 0L) > 0, onClick = { val id = guardianId.toLongOrNull() ?: return@Button; viewModel.requestGuardian(id) }) { Text("요청") }
+        Text("내 회원 ID  ${myId ?: "확인 중"}", color = TextMuted, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                guardianId, viewModel::changeGuardianInput,
+                placeholder = { Text("보호자 회원 ID", style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = TextMuted) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f), singleLine = true, enabled = !busy, shape = RoundedCornerShape(14.dp),
+            )
+            Button(enabled = !busy && (guardianId.toLongOrNull() ?: 0L) > 0, onClick = { val id = guardianId.toLongOrNull() ?: return@Button; viewModel.requestGuardian(id) }, shape = RoundedCornerShape(14.dp), modifier = Modifier.height(56.dp)) { Text("요청") }
         }
-        Row { TextButton(enabled = !busy, onClick = viewModel::refresh) { Text("새로고침") } }
-        TextButton(enabled = !busy, onClick = { viewModel.loadEvents() }) { Text("내 위험 기록") }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalDivider(Modifier.padding(top = 20.dp, bottom = 12.dp), color = AppBorder)
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+            item {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(enabled = !busy, onClick = { viewModel.loadEvents() }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("내 위험 기록") }
+                    if (state.sessionId != null) TextButton(enabled = !busy, onClick = { reportDescription = "" }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("위험 상황 기록") }
+                }
+                HorizontalDivider(Modifier.padding(top = 8.dp, bottom = 12.dp), color = AppBorder)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("보호 관계 ${rows.size}", color = TextMuted, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    Text("회원 ID로 요청", color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                }
+                message?.let { Text(it, color = DangerRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+                state.notice?.let { Text(it, color = SafeBlue, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp), color = SkyBlue, trackColor = FieldBg)
+            }
+            if (rows.isEmpty() && !busy) item {
+                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.PeopleOutline, null, tint = AppBorder, modifier = Modifier.size(56.dp))
+                    Text("등록된 보호 관계가 없어요", color = TextMuted, modifier = Modifier.padding(top = 12.dp))
+                }
+            }
             items(rows, key = { it.id }) { row ->
                 val owner = row.userId == myId
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(if (owner) "내 보호자: ${row.guardianName}" else "보호할 사용자: ${row.userName}")
-                        Text(when (row.status) { "PENDING" -> "요청 대기"; "ACCEPTED" -> "수락됨"; "REJECTED" -> "거절됨"; "REVOKED" -> "해제됨"; "SUSPENDED" -> "중지됨"; else -> row.status })
-                        Row {
+                val name = if (owner) row.guardianName else row.userName
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(18.dp), color = SkyBlue.copy(alpha = .12f), modifier = Modifier.size(52.dp)) {
+                            Box(contentAlignment = Alignment.Center) { Text(name.take(1), color = SafeBlue, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
+                        }
+                        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(name, color = TextMain, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                            Text(if (owner) "나의 보호자" else "내가 보호하는 사용자", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(when (row.status) { "PENDING" -> "요청 대기"; "ACCEPTED" -> "연결됨"; "REJECTED" -> "거절됨"; "REVOKED" -> "해제됨"; "SUSPENDED" -> "중지됨"; else -> row.status }, color = if (row.status == "ACCEPTED") SafeBlue else TextMuted, style = MaterialTheme.typography.labelMedium)
+                    }
+                    if (row.status == "PENDING" || row.status == "ACCEPTED") {
+                        Row(Modifier.padding(start = 58.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (row.status == "PENDING" && !owner) {
-                                TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "accept") }) { Text("수락") }
-                                TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "reject") }) { Text("거절") }
+                                TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "accept") }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("수락") }
+                                TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "reject") }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("거절") }
                             }
-                            if (row.status == "PENDING" || row.status == "ACCEPTED") TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "revoke") }) { Text(if (row.status == "PENDING") "요청 취소" else "관계 해제") }
-                            if (owner && row.status == "ACCEPTED") TextButton(enabled = !busy, onClick = { editing = row }) { Text("열람 권한") }
-                            if (!owner && row.status == "ACCEPTED" && row.canViewStatus) TextButton(enabled = !busy, onClick = { viewModel.loadEvents(row.userId) }) { Text("위험 기록") }
+                            if (owner && row.status == "ACCEPTED") TextButton(enabled = !busy, onClick = { editing = row }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("열람 권한") }
+                            if (!owner && row.status == "ACCEPTED" && row.canViewStatus) TextButton(enabled = !busy, onClick = { viewModel.loadEvents(row.userId, row.id) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("위험 기록") }
+                            TextButton(enabled = !busy, onClick = { viewModel.respond(row.id, "revoke") }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (row.status == "PENDING") "요청 취소" else "관계 해제", color = TextMuted) }
                         }
                     }
                 }
             }
         }
     }
-    if (confirmSessionEnd) AlertDialog(
-        onDismissRequest = { confirmSessionEnd = false },
-        title = { Text("서버 귀가 세션을 종료할까요?") },
-        text = { Text("서버에 저장된 진행 중 세션을 종료합니다.") },
-        confirmButton = { TextButton(onClick = { confirmSessionEnd = false; viewModel.endSession() }) { Text("종료") } },
-        dismissButton = { TextButton(onClick = { confirmSessionEnd = false }) { Text("취소") } },
-    )
+    reportDescription?.let { description ->
+        AlertDialog(onDismissRequest = { reportDescription = null }, title = { Text("위험 상황 직접 기록") }, text = {
+            Column {
+                Text("저장하면 등록된 보호자에게 알림이 발송될 수 있습니다.")
+                OutlinedTextField(description, { reportDescription = it.take(500) }, label = { Text("상황 설명") })
+            }
+        }, confirmButton = {
+            TextButton(enabled = !busy && description.isNotBlank(), onClick = { viewModel.createEvent(description); reportDescription = null }) { Text("저장 및 알림") }
+        }, dismissButton = { TextButton(onClick = { reportDescription = null }) { Text("취소") } })
+    }
     events?.let { list ->
         AlertDialog(onDismissRequest = viewModel::dismissEvents, title = { Text("위험 기록") }, text = {
             LazyColumn { if (list.isEmpty()) item { Text("기록이 없습니다.") }; items(list, key = { it.id }) { event ->
@@ -86,10 +139,26 @@ fun BackendGuardianScreen(modifier: Modifier = Modifier) {
                 Text(event.description)
                 Text(event.detectedAt)
                 Text("첨부 ${state.eventMedia.size}개")
-                state.eventMedia.forEach { Text("${it.mediaType}: ${it.fileName ?: "파일"}") }
+                state.eventMedia.forEach { media ->
+                    TextButton(enabled = !busy, onClick = {
+                        pendingDownload = event.id to media.id
+                        downloadLauncher.launch(media.fileName?.substringAfterLast('/')?.substringAfterLast('\\')?.takeIf { it.isNotBlank() } ?: "attachment")
+                    }) { Text("${media.mediaType}: ${media.fileName ?: "파일"} 저장") }
+                }
+                if (event.userId == myId && event.status != "RESOLVED") {
+                    TextButton(enabled = !busy, onClick = { confirmResolve = true }) { Text("해결 완료로 표시") }
+                }
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                state.notice?.let { Text(it) }
             }
         }, confirmButton = { TextButton(onClick = viewModel::dismissEventDetail) { Text("닫기") } })
     }
+    if (confirmResolve) AlertDialog(
+        onDismissRequest = { confirmResolve = false }, title = { Text("해결 완료로 표시할까요?") },
+        text = { Text("상태 변경 시 보호자에게 알림이 발송될 수 있습니다.") },
+        confirmButton = { TextButton(onClick = { state.eventDetail?.let { viewModel.resolveEvent(it.id) }; confirmResolve = false }) { Text("변경") } },
+        dismissButton = { TextButton(onClick = { confirmResolve = false }) { Text("취소") } },
+    )
     editing?.let { row ->
         var location by remember(row.id) { mutableStateOf(row.canViewLocation) }
         var status by remember(row.id) { mutableStateOf(row.canViewStatus) }

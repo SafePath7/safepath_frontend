@@ -37,7 +37,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.safepath_test1.friends.CreatedFriendInvite
-import com.example.safepath_test1.location.TestJourneyClient
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.model.PlaceSelection
 import com.example.safepath_test1.ui.SafePathTab
@@ -64,7 +63,6 @@ fun SafePathApp() {
     LaunchedEffect(Unit) {
         val requested = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (android.os.Build.VERSION.SDK_INT >= 33) requested.add(Manifest.permission.POST_NOTIFICATIONS)
-        if (android.os.Build.VERSION.SDK_INT >= 37 && BuildConfig.DEBUG) requested.add("android.permission.ACCESS_LOCAL_NETWORK")
         val missing = requested.filter { ContextCompat.checkSelfPermission(permissionContext, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) startupPermissions.launch(missing.toTypedArray())
     }

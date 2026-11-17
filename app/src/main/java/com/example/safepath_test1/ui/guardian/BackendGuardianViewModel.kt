@@ -1,6 +1,7 @@
 package com.example.safepath_test1.ui.guardian
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.safepath_test1.api.AccountRepository
@@ -9,6 +10,7 @@ import com.example.safepath_test1.api.GuardianPermissions
 import com.example.safepath_test1.api.GuardianRegistration
 import com.example.safepath_test1.api.RiskEventDetail
 import com.example.safepath_test1.api.RiskMedia
+import com.example.safepath_test1.api.RiskEventRequest
 import com.example.safepath_test1.api.accountErrorMessage
 import com.example.safepath_test1.friends.cacheServerFriends
 import com.google.firebase.auth.FirebaseAuth
@@ -18,6 +20,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import retrofit2.HttpException
 
 data class BackendGuardianState(
@@ -30,6 +38,7 @@ data class BackendGuardianState(
     val eventMedia: List<RiskMedia> = emptyList(),
     val guardianInput: String = "",
     val sessionId: String? = null,
+    val notice: String? = null,
 )
 
 class BackendGuardianViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,7 +84,7 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     private fun perform(action: suspend (String) -> Unit) {
         val uid = accountUid ?: return
         if (mutableState.value.busy) return
-        mutableState.update { it.copy(busy = true, error = null) }
+        mutableState.update { it.copy(busy = true, error = null, notice = null) }
         job = viewModelScope.launch {
             try {
                 action(uid)
@@ -99,7 +108,10 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     }
     fun respond(id: Long, action: String) = perform { uid -> backend.respond(id, action); load(uid) }
     fun updatePermissions(id: Long, value: GuardianPermissions) = perform { uid -> backend.permissions(id, value); load(uid) }
-    fun loadEvents(userId: Long? = null) = perform { uid ->
+    fun loadEvents(userId: Long? = null, registrationId: Long? = null) = perform { uid ->
+        if (registrationId != null) {
+            check(backend.checkPermission(registrationId, "STATUS").allowed) { "위험 기록을 볼 권한이 없습니다." }
+        }
         val events = backend.riskEvents(userId)
         check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
         mutableState.update { it.copy(events = events) }
@@ -112,24 +124,38 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
         mutableState.update { it.copy(eventDetail = event, eventMedia = media) }
     }
     fun dismissEventDetail() { mutableState.update { it.copy(eventDetail = null, eventMedia = emptyList()) } }
-    fun startSession() = perform { uid ->
-        val session = backend.startSession()
+    fun createEvent(description: String) = perform { uid ->
+        val sessionId = mutableState.value.sessionId ?: error("진행 중인 서버 세션이 없습니다.")
+        val timestamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date())
+        backend.createRiskEvent(RiskEventRequest(sessionId, "MANUAL", description.trim(), timestamp))
         check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-        if (!sessions.edit().putString(uid, session.id).commit()) {
-            runCatching { backend.endSession(session.id) }
-            error("세션을 기기에 저장하지 못했습니다. 서버 상태를 확인해 주세요.")
+        mutableState.update { it.copy(notice = "위험 기록을 저장했습니다.") }
+    }
+    fun resolveEvent(id: Long) = perform { uid ->
+        val result = backend.updateRiskEventStatus(id, "RESOLVED")
+        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+        mutableState.update { current ->
+            current.copy(
+                eventDetail = current.eventDetail?.let { if (it.id == id) it.copy(status = result.status) else it },
+                events = current.events?.map { if (it.id == id) it.copy(status = result.status) else it },
+                notice = "위험 기록을 해결 완료로 변경했습니다.",
+            )
         }
-        mutableState.update { it.copy(sessionId = session.id) }
     }
-    fun endSession() = perform { uid ->
-        val id = sessions.getString(uid, null) ?: return@perform
-        try { backend.endSession(id) }
-        catch (error: HttpException) { if (error.code() != 404) throw error }
-        check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-        sessions.edit().remove(uid).apply()
-        mutableState.update { it.copy(sessionId = null) }
+    fun downloadMedia(eventId: Long, mediaId: Long, destination: Uri) = perform { uid ->
+        val body = backend.downloadRiskMedia(eventId, mediaId)
+        body.use { response ->
+            withContext(Dispatchers.IO) {
+                check(auth.currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+                val output = getApplication<Application>().contentResolver.openOutputStream(destination)
+                    ?: error("저장할 파일을 열 수 없습니다.")
+                output.use { response.byteStream().copyTo(it) }
+            }
+        }
+        mutableState.update { it.copy(notice = "첨부파일을 저장했습니다.") }
     }
-
     override fun onCleared() {
         auth.removeAuthStateListener(listener)
         job?.cancel()
