@@ -30,3 +30,5 @@ rootProject.name = "safepath-test1"
 include(":app")
 
 include(":wear")
+
+include(":wear-contract")

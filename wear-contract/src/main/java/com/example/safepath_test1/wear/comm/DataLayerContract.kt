@@ -1,15 +1,16 @@
 package com.example.safepath_test1.wear.comm
 
 /*
- * 폰(app 모듈)과 Wearable Data Layer로 주고받는 경로와 DataMap 키 모음.
+ * 폰(app 모듈)과 워치(wear 모듈)가 Wearable Data Layer로 주고받는 경로와 DataMap 키의 유일한 원본.
  *
- * 폰과 워치는 코드를 공유하지 않는다. 그래서 폰 쪽 같은 값(WearMessenger, WearMapImageSender,
- * WearDataRelayService, WearSosRelayService, WearVoiceRelayService, WatchLauncher)과 한 글자만 달라도
- * 에러 없이 조용히 데이터가 안 온다. 값을 바꿀 때는 폰 쪽을 먼저 맞추고 DataLayerContractTest도 같이 고친다.
+ * 두 모듈 모두 이 wear-contract 모듈을 가져다 쓴다. 경로나 키를 문자열로 직접 적지 말고 여기 상수를 쓴다.
+ * 한 글자만 달라도 에러 없이 조용히 데이터가 안 오기 때문이다.
+ * 값을 바꾸면 이미 설치된 상대편 앱과 통신이 끊기므로 폰과 워치를 함께 다시 설치하고, DataLayerContractTest도 같이 고친다.
+ * 예외: AndroidManifest.xml의 pathPrefix는 상수를 쓸 수 없어 문자열로 적혀 있다(app·wear 둘 다). 경로를 바꾸면 그곳도 고친다.
  */
 
 /** DataItem 경로. */
-internal object DataLayerPaths {
+object DataLayerPaths {
     /** 폰 → 워치: 길안내 상태, 경로, 현재 위치, 회전 안내. */
     const val STATUS = "/safepath/status"
 
@@ -33,7 +34,7 @@ internal object DataLayerPaths {
 }
 
 /** [DataLayerPaths.STATUS] DataMap 키와 값. */
-internal object StatusKeys {
+object StatusKeys {
     const val UPDATED_AT = "updatedAt"
     const val STATE = "state"
     const val ROUTE_TYPE = "routeType"
@@ -48,13 +49,15 @@ internal object StatusKeys {
 }
 
 /** [StatusKeys.STATE]가 가질 수 있는 값. */
-internal object StatusStates {
+object StatusStates {
+    /** 길안내 없음. 워치는 모르는 값도 대기로 보지만, 폰은 이 값을 보낸다. */
+    const val IDLE = "IDLE"
     const val SEARCHING = "SEARCHING"
     const val FOUND = "FOUND"
 }
 
 /** [DataLayerPaths.MAP] DataMap 키. */
-internal object MapKeys {
+object MapKeys {
     const val IMAGE = "image"
     const val CENTER_LAT = "centerLat"
     const val CENTER_LNG = "centerLng"
@@ -64,12 +67,17 @@ internal object MapKeys {
 }
 
 /** [DataLayerPaths.RELEASE] DataMap 키. */
-internal object ReleaseKeys {
+object ReleaseKeys {
     const val UPDATED_AT = "updatedAt"
 }
 
+/** [DataLayerPaths.LAUNCH_WATCH] DataMap 키. 같은 요청이 중복으로 걸러지지 않도록 매번 요청 시각을 담는다. */
+object LaunchKeys {
+    const val REQUESTED_AT = "requestedAt"
+}
+
 /** [DataLayerPaths.MOTION] DataMap 키. */
-internal object MotionKeys {
+object MotionKeys {
     const val ACCEL_X = "accelX"
     const val ACCEL_Y = "accelY"
     const val ACCEL_Z = "accelZ"
@@ -80,7 +88,7 @@ internal object MotionKeys {
 }
 
 /** [DataLayerPaths.VOICE] DataMap 키와 값. */
-internal object VoiceKeys {
+object VoiceKeys {
     const val FORMAT = "format"
     const val AUDIO = "audio"
     const val SEQ = "seq"
@@ -94,6 +102,6 @@ internal object VoiceKeys {
 }
 
 /** [DataLayerPaths.SOS] DataMap 키. */
-internal object SosKeys {
+object SosKeys {
     const val TRIGGERED_AT = "triggeredAt"
 }

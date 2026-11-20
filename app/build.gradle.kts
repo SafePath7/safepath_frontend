@@ -106,6 +106,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
+    implementation(project(":wear-contract"))
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.espresso.core)
