@@ -101,6 +101,11 @@ internal class WearAppState {
         alert = alert.markNotConnected(requestedAt)
     }
 
+    /** 보낸 지 오래됐는데 답장이 없으면 아직 전달되지 않은 것으로 바꾼다. */
+    fun checkSosAckOverdue(now: Long = System.currentTimeMillis()) {
+        alert = alert.ackOverdue(now)
+    }
+
     /** 폰의 해제 신호가 이 위험상황의 것이면 평소 화면으로 돌아간다. */
     fun releaseIfSignalled() {
         alert = alert.releasedBy(releaseSignalAt)

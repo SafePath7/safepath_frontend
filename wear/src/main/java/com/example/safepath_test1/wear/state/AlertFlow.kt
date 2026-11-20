@@ -6,6 +6,12 @@ internal const val CHECK_IN_COUNTDOWN_MS = 30_000L
 /** 폰·워치 시계가 조금 어긋나도 방금 한 해제 신호를 놓치지 않도록 두는 여유(ms). */
 internal const val RELEASE_CLOCK_SKEW_MS = 5_000L
 
+/**
+ * SOS를 보낸 뒤 이 시간 안에 폰의 답장(SOS_ACK)이 없으면 아직 전달되지 않은 것으로 보여 준다.
+ * 워치의 연결 목록은 연결이 막 끊긴 직후에도 폰을 "연결됨"으로 돌려줄 수 있어서, 실제 답장 여부로 한 번 더 확인한다.
+ */
+internal const val SOS_ACK_TIMEOUT_MS = 10_000L
+
 /** 위험 감지 흐름: 평소(길안내) → 확인 질문(UI-W3) → 보호자 알림(UI-W4). */
 internal enum class AlertStage {
     None,
@@ -23,7 +29,10 @@ internal enum class SosDelivery {
     /** 폰이 받았다고 답장했다. */
     Delivered,
 
-    /** 보낼 때 연결된 폰이 없었다. SOS는 워치에 남아 있다가 연결되면 넘어가고, 그때 답장이 오면 [Delivered]가 된다. */
+    /**
+     * 보낼 때 연결된 폰이 없었거나 [SOS_ACK_TIMEOUT_MS] 안에 답장이 없었다.
+     * SOS는 워치에 남아 있다가 연결되면 넘어가고, 그때 답장이 오면 [Delivered]가 된다.
+     */
     NotConnected,
 }
 
@@ -61,6 +70,13 @@ internal data class AlertState(
         } else {
             this
         }
+
+    /**
+     * 보낸 지 [SOS_ACK_TIMEOUT_MS]가 지나도록 답장이 없으면 아직 전달되지 않은 것으로 바꾼다.
+     * 이미 전달됐거나 위험상황이 아니면 그대로 둔다.
+     */
+    fun ackOverdue(now: Long): AlertState =
+        if (now - helpRequestedAt >= SOS_ACK_TIMEOUT_MS) markNotConnected(helpRequestedAt) else this
 
     /** 폰의 답장([triggeredAt])이 지금 위험상황의 SOS에 대한 것이면 전달됨으로 바꾼다. 옛 SOS의 답장은 무시한다. */
     fun acknowledgedBy(triggeredAt: Long): AlertState =

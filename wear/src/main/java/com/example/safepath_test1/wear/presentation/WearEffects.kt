@@ -15,6 +15,7 @@ import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchVoiceRecorder
 import com.example.safepath_test1.wear.sensors.WatchVoiceSender
 import com.example.safepath_test1.wear.state.AlertStage
+import com.example.safepath_test1.wear.state.SOS_ACK_TIMEOUT_MS
 import kotlinx.coroutines.delay
 
 private const val TAG = "WearEffects"
@@ -101,6 +102,7 @@ internal fun StaleStatusEffect(state: WearAppState) {
 /**
  * 위험 감지 흐름의 시간에 따른 동작.
  * 폰의 해제 신호가 오면 위험상황 화면을 닫고, 확인 질문은 남은 시간을 줄이다가 0이 되면 [requestHelp]를 부른다.
+ * 위험상황이 되면 [SOS_ACK_TIMEOUT_MS] 뒤에 폰의 답장이 왔는지 확인해서, 없으면 아직 전달되지 않았다고 보여 준다.
  */
 @Composable
 internal fun AlertEffects(state: WearAppState, requestHelp: () -> Unit) {
@@ -108,6 +110,13 @@ internal fun AlertEffects(state: WearAppState, requestHelp: () -> Unit) {
 
     // 폰에서 해제 신호가 오면 위험상황 화면을 닫고 평소 화면(길안내)으로 돌아간다.
     LaunchedEffect(state.releaseSignalAt) { state.releaseIfSignalled() }
+
+    LaunchedEffect(state.alert.stage, state.alert.helpRequestedAt) {
+        if (state.alert.stage != AlertStage.Alerted) return@LaunchedEffect
+        val waitMs = state.alert.helpRequestedAt + SOS_ACK_TIMEOUT_MS - System.currentTimeMillis()
+        delay(waitMs.coerceAtLeast(0L))
+        state.checkSosAckOverdue()
+    }
 
     LaunchedEffect(state.alert.stage, state.alert.checkInStartedAt) {
         if (state.alert.stage != AlertStage.CheckIn) return@LaunchedEffect

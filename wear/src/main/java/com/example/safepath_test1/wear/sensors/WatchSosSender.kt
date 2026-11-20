@@ -41,7 +41,10 @@ object WatchSosSender {
     fun checkPhoneConnected(context: Context, onResult: (Boolean) -> Unit) {
         Wearable.getNodeClient(context)
             .connectedNodes
-            .addOnSuccessListener { nodes -> onResult(nodes.isNotEmpty()) }
+            .addOnSuccessListener { nodes ->
+                Log.i(TAG, "Connected phone check: ${nodes.size} node(s) ${nodes.map { it.displayName }}")
+                onResult(nodes.isNotEmpty())
+            }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Failed to check connected phone", e)
                 onResult(false)

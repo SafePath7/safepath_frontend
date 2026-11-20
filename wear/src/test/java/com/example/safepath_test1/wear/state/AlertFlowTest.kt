@@ -110,6 +110,22 @@ class AlertFlowTest {
     }
 
     @Test
+    fun ackOverdue_marksNotConnectedOnlyAfterTheTimeout() {
+        val alerted = AlertState().requestHelp(now = 100_000L)
+        assertEquals(SosDelivery.Sending, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS - 1).delivery)
+        assertEquals(SosDelivery.NotConnected, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS).delivery)
+    }
+
+    @Test
+    fun ackOverdue_keepsDeliveredAndIgnoresOtherStages() {
+        val late = 100_000L + SOS_ACK_TIMEOUT_MS * 3
+        val delivered = AlertState().requestHelp(now = 100_000L).acknowledgedBy(100_000L)
+        assertEquals(SosDelivery.Delivered, delivered.ackOverdue(late).delivery)
+        val dismissed = AlertState().requestHelp(now = 100_000L).dismiss()
+        assertEquals(SosDelivery.Sending, dismissed.ackOverdue(late).delivery)
+    }
+
+    @Test
     fun newRequest_resetsDelivery() {
         val delivered = AlertState().requestHelp(now = 100_000L).acknowledgedBy(100_000L)
         val again = delivered.dismiss().requestHelp(now = 200_000L)

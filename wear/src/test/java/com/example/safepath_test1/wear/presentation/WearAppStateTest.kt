@@ -5,6 +5,7 @@ import com.example.safepath_test1.wear.state.AlertStage
 import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
 import com.example.safepath_test1.wear.state.RouteMapState
 import com.example.safepath_test1.wear.state.RouteStatus
+import com.example.safepath_test1.wear.state.SOS_ACK_TIMEOUT_MS
 import com.example.safepath_test1.wear.state.STALE_AFTER_MS
 import com.example.safepath_test1.wear.state.SosDelivery
 import org.junit.Assert.assertEquals
@@ -102,5 +103,13 @@ class WearAppStateTest {
         assertEquals(SosDelivery.NotConnected, state.alert.delivery)
         state.onSosAck(triggeredAt = 100_000L)
         assertEquals(SosDelivery.Delivered, state.alert.delivery)
+    }
+
+    @Test
+    fun noAckWithinTheTimeout_showsNotDeliveredYet() {
+        val state = WearAppState()
+        state.requestHelp(now = 100_000L)
+        state.checkSosAckOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS)
+        assertEquals(SosDelivery.NotConnected, state.alert.delivery)
     }
 }
