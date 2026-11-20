@@ -17,6 +17,7 @@ class DataLayerContractTest {
         assertEquals("/safepath/motion", DataLayerPaths.MOTION)
         assertEquals("/safepath/voice", DataLayerPaths.VOICE)
         assertEquals("/safepath/sos", DataLayerPaths.SOS)
+        assertEquals("/safepath/sos_ack", DataLayerPaths.SOS_ACK)
     }
 
     @Test
@@ -30,6 +31,7 @@ class DataLayerContractTest {
                 DataLayerPaths.MOTION,
                 DataLayerPaths.VOICE,
                 DataLayerPaths.SOS,
+                DataLayerPaths.SOS_ACK,
             )
         assertEquals(all.size, all.toSet().size)
     }
@@ -87,5 +89,6 @@ class DataLayerContractTest {
             ),
         )
         assertEquals("triggeredAt", SosKeys.TRIGGERED_AT)
+        assertEquals("triggeredAt", SosAckKeys.TRIGGERED_AT)
     }
 }
