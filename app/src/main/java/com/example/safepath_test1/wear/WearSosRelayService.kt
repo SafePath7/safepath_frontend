@@ -9,14 +9,12 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.safepath_test1.MainActivity
+import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WearSosRelayService"
-
-/** Must match WatchSosSender.PATH_SOS (wear module) - the two modules can't share code. */
-private const val PATH_SOS = "/safepath/sos"
 
 private const val CHANNEL_ID = "safepath_sos"
 private const val NOTIFICATION_ID = 2001
@@ -35,7 +33,7 @@ class WearSosRelayService : WearableListenerService() {
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         for (event in dataEvents) {
             if (event.type != DataEvent.TYPE_CHANGED) continue
-            if (event.dataItem.uri.path != PATH_SOS) continue
+            if (event.dataItem.uri.path != DataLayerPaths.SOS) continue
 
             Log.i(TAG, "SOS received from watch")
             val requestedAt = System.currentTimeMillis()

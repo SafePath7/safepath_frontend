@@ -38,6 +38,7 @@
             </intent-filter>
         </activity>
 
+        <!-- 아래 Data Layer 서비스들의 pathPrefix는 wear-contract의 DataLayerPaths와 같아야 한다(XML에서는 상수를 못 쓴다). -->
         <service android:name=".wear.WearDataRelayService" android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />

@@ -2,13 +2,12 @@ package com.example.safepath_test1.wear
 
 import android.content.Context
 import android.util.Log
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.LaunchKeys
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 
 private const val TAG = "WatchLauncher"
-
-/** Watch-side WatchLaunchListenerService (wear module) listens on this same path - keep both in sync. */
-const val PATH_LAUNCH_WATCH = "/safepath/launch_watch"
 
 /**
  * Tells the paired watch to open the SafePath watch app, if a watch is currently connected.
@@ -37,8 +36,8 @@ object WatchLauncher {
 
     private fun send(context: Context) {
         val putDataMapRequest =
-            PutDataMapRequest.create(PATH_LAUNCH_WATCH).apply {
-                dataMap.putLong("requestedAt", System.currentTimeMillis())
+            PutDataMapRequest.create(DataLayerPaths.LAUNCH_WATCH).apply {
+                dataMap.putLong(LaunchKeys.REQUESTED_AT, System.currentTimeMillis())
             }
         val request = putDataMapRequest.asPutDataRequest().setUrgent()
 

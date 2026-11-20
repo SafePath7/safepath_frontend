@@ -4,8 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * 폰과 약속한 값이 실수로 바뀌지 않게 현재 값을 그대로 고정한다.
- * 이 테스트가 깨졌다면 폰(app 모듈)의 같은 값도 함께 바꿨는지 먼저 확인한다.
+ * 폰과 워치가 약속한 값이 실수로 바뀌지 않게 현재 값을 그대로 고정한다.
+ * 이 테스트가 깨졌다면 이미 설치된 상대편 앱과 통신이 끊기는 변경인지 먼저 확인한다.
  */
 class DataLayerContractTest {
     @Test
@@ -48,6 +48,7 @@ class DataLayerContractTest {
                 StatusKeys.CUR_LAT, StatusKeys.CUR_LNG,
             ),
         )
+        assertEquals("IDLE", StatusStates.IDLE)
         assertEquals("SEARCHING", StatusStates.SEARCHING)
         assertEquals("FOUND", StatusStates.FOUND)
     }
@@ -62,6 +63,7 @@ class DataLayerContractTest {
             ),
         )
         assertEquals("updatedAt", ReleaseKeys.UPDATED_AT)
+        assertEquals("requestedAt", LaunchKeys.REQUESTED_AT)
     }
 
     @Test
