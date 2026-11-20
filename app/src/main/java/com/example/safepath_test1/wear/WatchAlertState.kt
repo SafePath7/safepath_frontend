@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * WearSosRelayService가 SOS를 받으면 켜고, 해제하면 끈다. 앱 프로세스가 죽었다가 알림을 눌러 다시 열리면 [restore]로 되살린다.
  * 서버에는 저장하지 않는다.
  */
-object WatchAlertState {
+internal object WatchAlertState {
     /** SOS 알림 인텐트에 요청 시각을 실어 두는 키. MainActivity가 읽어 [restore]에 넘긴다. */
     const val EXTRA_REQUESTED_AT = "safepath.watch_sos_requested_at"
 

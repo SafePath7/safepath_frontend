@@ -19,7 +19,7 @@ private const val TAG = "WatchLauncher"
  * DataClient는 DataMap 내용이 실제로 바뀔 때만 onDataChanged를 부르므로, 이전 실행 요청과 같은 것으로
  * 걸러지지 않게 매번 요청 시각(`requestedAt`)을 담는다.
  */
-object WatchLauncher {
+internal object WatchLauncher {
 
     fun launchIfWatchConnected(context: Context) {
         Wearable.getNodeClient(context).connectedNodes

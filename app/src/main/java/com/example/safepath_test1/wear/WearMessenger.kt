@@ -20,14 +20,14 @@ import org.json.JSONObject
  * 워치로 보내는 회전 안내 한 단계. Mapbox Directions 응답(steps=true)의 각 step에서
  * maneuver.location을 [point]로, maneuver.type을 [type]으로, maneuver.modifier를 [modifier]로 그대로 옮긴다.
  */
-data class WearRouteStep(val point: GeoPoint, val type: String, val modifier: String?)
+internal data class WearRouteStep(val point: GeoPoint, val type: String, val modifier: String?)
 
 /**
  * 동일한 applicationId를 사용하는 휴대폰과 워치 사이에 DataClient로 경로 상태를 전송한다.
  * MessageClient는 실기기에서 전송 오류가 발생해, 실기기에서 확인된 DataClient를 사용한다.
  * 동일한 데이터는 중복 전송되지 않으므로 매 호출마다 updatedAt을 포함한다.
  */
-object WearMessenger {
+internal object WearMessenger {
     private const val TAG = "WearMessenger"
 
     /**

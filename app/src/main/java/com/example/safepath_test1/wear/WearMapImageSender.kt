@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * 요청이 실패하면 1분 동안은 다시 요청하지 않아, 토큰 오류 같은 문제로 요청이 쏟아지지 않게 한다.
  * 경로와 키는 워치와 함께 쓰는 wear-contract의 [DataLayerPaths.MAP], [MapKeys]를 쓴다.
  */
-object WearMapImageSender {
+internal object WearMapImageSender {
     private const val TAG = "WearMapImageSender"
 
     /** 어두운 배경 지도. 라벨이 거슬리면 Mapbox Studio에서 만든 스타일 ID로 바꾸면 된다. */

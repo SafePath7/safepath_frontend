@@ -96,6 +96,6 @@ class WearSosRelayService : WearableListenerService() {
 }
 
 /** 해제했을 때 폰에 남은 "SOS 수신" 알림을 지운다. */
-fun cancelSosNotification(context: Context) {
+internal fun cancelSosNotification(context: Context) {
     context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
 }
