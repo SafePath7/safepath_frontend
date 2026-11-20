@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.ReleaseKeys
+import com.example.safepath_test1.wear.comm.SosAckKeys
 import com.example.safepath_test1.wear.comm.StatusKeys
 import com.example.safepath_test1.wear.comm.StatusStates
 import com.google.android.gms.wearable.PutDataMapRequest
@@ -108,6 +109,22 @@ object WearMessenger {
                 Log.e(TAG, "Release signal failed", e)
                 onResult(false)
             }
+    }
+
+    /**
+     * 워치가 보낸 SOS를 받았다고 답장한다. 워치는 이 답장이 와야 위험상황 화면에 "전달됨"을 보여 준다.
+     * [triggeredAt]은 워치가 SOS에 담아 보낸 값을 그대로 돌려준다. 워치는 지금 위험상황의 요청 시각과 같을 때만 받아들인다.
+     */
+    fun sendSosAck(context: Context, triggeredAt: Long) {
+        val request =
+            PutDataMapRequest.create(DataLayerPaths.SOS_ACK)
+                .apply { dataMap.putLong(SosAckKeys.TRIGGERED_AT, triggeredAt) }
+                .asPutDataRequest()
+                .setUrgent()
+        Wearable.getDataClient(context)
+            .putDataItem(request)
+            .addOnSuccessListener { Log.i(TAG, "SOS ack synced triggeredAt=$triggeredAt") }
+            .addOnFailureListener { e -> Log.e(TAG, "SOS ack failed", e) }
     }
 
     fun sendIdle(context: Context) {

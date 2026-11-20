@@ -72,6 +72,68 @@ class AlertFlowTest {
     }
 
     @Test
+    fun requestHelp_startsAsSending() {
+        assertEquals(SosDelivery.Sending, AlertState().requestHelp(now = 100_000L).delivery)
+    }
+
+    @Test
+    fun matchingAck_marksDelivered_butOtherAcksAreIgnored() {
+        val alerted = AlertState().requestHelp(now = 100_000L)
+        assertEquals(SosDelivery.Delivered, alerted.acknowledgedBy(triggeredAt = 100_000L).delivery)
+        // 예전 SOS의 답장, 값이 빠진 답장은 지금 위험상황을 바꾸지 않는다.
+        assertEquals(SosDelivery.Sending, alerted.acknowledgedBy(triggeredAt = 90_000L).delivery)
+        assertEquals(SosDelivery.Sending, alerted.acknowledgedBy(triggeredAt = 0L).delivery)
+    }
+
+    @Test
+    fun ack_isIgnoredOutsideTheAlertedStage() {
+        val dismissed = AlertState().requestHelp(now = 100_000L).dismiss()
+        assertEquals(AlertStage.None, dismissed.acknowledgedBy(100_000L).stage)
+        assertEquals(SosDelivery.Sending, dismissed.acknowledgedBy(100_000L).delivery)
+    }
+
+    @Test
+    fun notConnected_appliesOnlyToTheCurrentRequestStillSending() {
+        val alerted = AlertState().requestHelp(now = 100_000L)
+        assertEquals(SosDelivery.NotConnected, alerted.markNotConnected(requestedAt = 100_000L).delivery)
+        // 다른 요청의 연결 확인 결과는 무시한다.
+        assertEquals(SosDelivery.Sending, alerted.markNotConnected(requestedAt = 90_000L).delivery)
+        // 답장이 먼저 왔으면 전달됨을 덮지 않는다.
+        val delivered = alerted.acknowledgedBy(100_000L)
+        assertEquals(SosDelivery.Delivered, delivered.markNotConnected(100_000L).delivery)
+    }
+
+    @Test
+    fun ackAfterNotConnected_marksDelivered() {
+        val notConnected = AlertState().requestHelp(now = 100_000L).markNotConnected(100_000L)
+        assertEquals(SosDelivery.Delivered, notConnected.acknowledgedBy(100_000L).delivery)
+    }
+
+    @Test
+    fun ackOverdue_marksNotConnectedOnlyAfterTheTimeout() {
+        val alerted = AlertState().requestHelp(now = 100_000L)
+        assertEquals(SosDelivery.Sending, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS - 1).delivery)
+        assertEquals(SosDelivery.NotConnected, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS).delivery)
+    }
+
+    @Test
+    fun ackOverdue_keepsDeliveredAndIgnoresOtherStages() {
+        val late = 100_000L + SOS_ACK_TIMEOUT_MS * 3
+        val delivered = AlertState().requestHelp(now = 100_000L).acknowledgedBy(100_000L)
+        assertEquals(SosDelivery.Delivered, delivered.ackOverdue(late).delivery)
+        val dismissed = AlertState().requestHelp(now = 100_000L).dismiss()
+        assertEquals(SosDelivery.Sending, dismissed.ackOverdue(late).delivery)
+    }
+
+    @Test
+    fun newRequest_resetsDelivery() {
+        val delivered = AlertState().requestHelp(now = 100_000L).acknowledgedBy(100_000L)
+        val again = delivered.dismiss().requestHelp(now = 200_000L)
+        assertEquals(SosDelivery.Sending, again.delivery)
+        assertEquals(200_000L, again.helpRequestedAt)
+    }
+
+    @Test
     fun shouldReleaseAlert_rules() {
         assertFalse(shouldReleaseAlert(releaseSignalAt = 0L, alertRequestedAt = 0L))
         assertTrue(shouldReleaseAlert(releaseSignalAt = 1L, alertRequestedAt = 0L))

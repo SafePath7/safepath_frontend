@@ -31,6 +31,9 @@ object DataLayerPaths {
 
     /** 워치 → 폰: SOS. */
     const val SOS = "/safepath/sos"
+
+    /** 폰 → 워치: SOS를 받았다는 답장. 워치는 이 답장이 와야 "전달됨"으로 보여 준다. */
+    const val SOS_ACK = "/safepath/sos_ack"
 }
 
 /** [DataLayerPaths.STATUS] DataMap 키와 값. */
@@ -103,5 +106,11 @@ object VoiceKeys {
 
 /** [DataLayerPaths.SOS] DataMap 키. */
 object SosKeys {
+    const val TRIGGERED_AT = "triggeredAt"
+}
+
+/** [DataLayerPaths.SOS_ACK] DataMap 키. */
+object SosAckKeys {
+    /** 받은 SOS의 [SosKeys.TRIGGERED_AT]을 그대로 돌려준다. 워치는 지금 위험상황의 요청 시각과 같을 때만 전달됨으로 본다. */
     const val TRIGGERED_AT = "triggeredAt"
 }
