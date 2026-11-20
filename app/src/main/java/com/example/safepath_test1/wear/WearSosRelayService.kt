@@ -10,8 +10,10 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.safepath_test1.MainActivity
 import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.SosKeys
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WearSosRelayService"
@@ -27,6 +29,8 @@ private const val NOTIFICATION_ID = 2001
  * yet to relay it further (see the milestone doc's risk notes), so for now "SOS sent" means "this
  * phone got notified". Notification pattern mirrors WatchLaunchListenerService's tap-to-open
  * fallback notification on the watch side.
+ *
+ * 받은 뒤에는 워치에 답장(SOS_ACK)을 보내서, 워치가 "휴대폰에 전달됨"을 보여 줄 수 있게 한다.
  */
 class WearSosRelayService : WearableListenerService() {
 
@@ -35,10 +39,14 @@ class WearSosRelayService : WearableListenerService() {
             if (event.type != DataEvent.TYPE_CHANGED) continue
             if (event.dataItem.uri.path != DataLayerPaths.SOS) continue
 
-            Log.i(TAG, "SOS received from watch")
+            val triggeredAt =
+                DataMapItem.fromDataItem(event.dataItem).dataMap.getLong(SosKeys.TRIGGERED_AT)
+            Log.i(TAG, "SOS received from watch triggeredAt=$triggeredAt")
             val requestedAt = System.currentTimeMillis()
             WatchAlertState.onSosReceived(requestedAt)
             showSosNotification(requestedAt)
+            // 워치가 보낸 시각을 그대로 돌려줘야 워치가 어느 SOS에 대한 답장인지 안다. 값이 없으면 답장하지 않는다.
+            if (triggeredAt > 0L) WearMessenger.sendSosAck(this, triggeredAt)
         }
     }
 
