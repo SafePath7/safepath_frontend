@@ -3,6 +3,10 @@ package com.example.safepath_test1.wear
 import android.content.Context
 import android.util.Log
 import com.example.safepath_test1.model.GeoPoint
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.ReleaseKeys
+import com.example.safepath_test1.wear.comm.StatusKeys
+import com.example.safepath_test1.wear.comm.StatusStates
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import java.util.Locale
@@ -24,10 +28,6 @@ data class WearRouteStep(val point: GeoPoint, val type: String, val modifier: St
  */
 object WearMessenger {
     private const val TAG = "WearMessenger"
-    const val PATH_STATUS = "/safepath/status"
-
-    /** 폰 → 워치: 위험상황 해제 신호. 워치의 DataLayerContract.RELEASE와 같은 값이어야 한다(두 모듈은 코드를 공유하지 못한다). */
-    const val PATH_RELEASE = "/safepath/release"
 
     /**
      * Route polyline is downsampled to this many points before being sent to the watch - plenty
@@ -51,27 +51,27 @@ object WearMessenger {
         routeSteps: List<WearRouteStep>? = null,
     ) {
         val putDataMapRequest =
-            PutDataMapRequest.create(PATH_STATUS).apply {
-                dataMap.putString("state", state)
-                if (routeType != null) dataMap.putString("routeType", routeType)
-                if (distanceMeters != null) dataMap.putDouble("distanceMeters", distanceMeters)
-                if (destinationName != null) dataMap.putString("destinationName", destinationName)
+            PutDataMapRequest.create(DataLayerPaths.STATUS).apply {
+                dataMap.putString(StatusKeys.STATE, state)
+                if (routeType != null) dataMap.putString(StatusKeys.ROUTE_TYPE, routeType)
+                if (distanceMeters != null) dataMap.putDouble(StatusKeys.DISTANCE_METERS, distanceMeters)
+                if (destinationName != null) dataMap.putString(StatusKeys.DESTINATION_NAME, destinationName)
                 routeLineGeoJson?.let { geoJson ->
                     val points = simplifyForWatch(parseGeoJsonPoints(geoJson))
-                    if (points.isNotEmpty()) dataMap.putString("routePoints", encodePoints(points))
+                    if (points.isNotEmpty()) dataMap.putString(StatusKeys.ROUTE_POINTS, encodePoints(points))
                 }
                 destinationPoint?.let {
-                    dataMap.putDouble("destLat", it.latitude)
-                    dataMap.putDouble("destLng", it.longitude)
+                    dataMap.putDouble(StatusKeys.DEST_LAT, it.latitude)
+                    dataMap.putDouble(StatusKeys.DEST_LNG, it.longitude)
                 }
                 currentPoint?.let {
-                    dataMap.putDouble("curLat", it.latitude)
-                    dataMap.putDouble("curLng", it.longitude)
+                    dataMap.putDouble(StatusKeys.CUR_LAT, it.latitude)
+                    dataMap.putDouble(StatusKeys.CUR_LNG, it.longitude)
                 }
                 routeSteps
                     ?.takeIf { it.isNotEmpty() }
-                    ?.let { dataMap.putString("routeSteps", encodeSteps(it)) }
-                dataMap.putLong("updatedAt", System.currentTimeMillis())
+                    ?.let { dataMap.putString(StatusKeys.ROUTE_STEPS, encodeSteps(it)) }
+                dataMap.putLong(StatusKeys.UPDATED_AT, System.currentTimeMillis())
             }
         val request = putDataMapRequest.asPutDataRequest().setUrgent()
 
@@ -94,8 +94,8 @@ object WearMessenger {
      */
     fun sendRelease(context: Context, onResult: (Boolean) -> Unit = {}) {
         val request =
-            PutDataMapRequest.create(PATH_RELEASE)
-                .apply { dataMap.putLong("updatedAt", System.currentTimeMillis()) }
+            PutDataMapRequest.create(DataLayerPaths.RELEASE)
+                .apply { dataMap.putLong(ReleaseKeys.UPDATED_AT, System.currentTimeMillis()) }
                 .asPutDataRequest()
                 .setUrgent()
         Wearable.getDataClient(context)
@@ -111,11 +111,11 @@ object WearMessenger {
     }
 
     fun sendIdle(context: Context) {
-        send(context, "IDLE")
+        send(context, StatusStates.IDLE)
     }
 
     fun sendRouteSearching(context: Context) {
-        send(context, "SEARCHING")
+        send(context, StatusStates.SEARCHING)
     }
 
     /**
@@ -142,7 +142,7 @@ object WearMessenger {
         mapCenter?.let { WearMapImageSender.sendIfNeeded(context, it) }
         send(
             context,
-            "FOUND",
+            StatusStates.FOUND,
             routeType = routeType,
             distanceMeters = distanceMeters,
             destinationName = destinationName,

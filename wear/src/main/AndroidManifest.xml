@@ -27,6 +27,7 @@
             </intent-filter>
         </activity>
 
+        <!-- pathPrefix는 wear-contract의 DataLayerPaths.LAUNCH_WATCH와 같아야 한다(XML에서는 상수를 못 쓴다). -->
         <service android:name=".launch.WatchLaunchListenerService" android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />

@@ -1,6 +1,8 @@
 package com.example.safepath_test1.wear
 
 import android.util.Log
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.VoiceKeys
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
@@ -8,13 +10,6 @@ import com.google.android.gms.wearable.WearableListenerService
 import java.util.concurrent.Executors
 
 private const val TAG = "WearVoiceRelayService"
-
-/** Must match WatchVoiceSender.PATH_VOICE (wear module) - the two modules can't share code. */
-private const val PATH_VOICE = "/safepath/voice"
-
-/** WatchVoiceSender의 "format" 값과 같아야 한다. */
-private const val FORMAT_AAC = "aac"
-private const val FORMAT_PCM16 = "pcm16"
 
 // 서비스 객체는 이벤트마다 새로 만들어질 수 있어서, 조각을 이어 붙이는 버퍼·디코더·작업 순서는 앱 프로세스 단위로 둔다.
 // 디코더와 버퍼는 voiceExecutor 스레드에서만 만진다.
@@ -38,14 +33,14 @@ class WearVoiceRelayService : WearableListenerService() {
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         for (event in dataEvents) {
             if (event.type != DataEvent.TYPE_CHANGED) continue
-            if (event.dataItem.uri.path != PATH_VOICE) continue
+            if (event.dataItem.uri.path != DataLayerPaths.VOICE) continue
 
             val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
             // 예전 워치 앱(첨부 파일 방식)이 보낸 조각은 여기서 null이 되어 건너뛴다.
-            val bytes = dataMap.getByteArray("audio") ?: continue
-            val format = dataMap.getString("format", FORMAT_PCM16)
-            val seq = dataMap.getLong("seq", -1L)
-            val capturedAt = dataMap.getLong("capturedAt")
+            val bytes = dataMap.getByteArray(VoiceKeys.AUDIO) ?: continue
+            val format = dataMap.getString(VoiceKeys.FORMAT, VoiceKeys.FORMAT_PCM16)
+            val seq = dataMap.getLong(VoiceKeys.SEQ, -1L)
+            val capturedAt = dataMap.getLong(VoiceKeys.CAPTURED_AT)
             val receivedAt = System.currentTimeMillis()
 
             // 압축 풀기·WAV 변환·파일 저장이 화면을 멈추지 않도록 별도 스레드 하나에서 순서대로 처리한다.
@@ -65,7 +60,7 @@ class WearVoiceRelayService : WearableListenerService() {
 
         val pcm =
             try {
-                if (format == FORMAT_AAC) voiceDecoder.decode(bytes) else bytes
+                if (format == VoiceKeys.FORMAT_AAC) voiceDecoder.decode(bytes) else bytes
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to decode voice chunk #$seq ($format)", e)
                 voiceDecoder.release()

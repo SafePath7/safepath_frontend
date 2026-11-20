@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.example.safepath_test1.R
 import com.example.safepath_test1.model.GeoPoint
+import com.example.safepath_test1.wear.comm.DataLayerPaths
+import com.example.safepath_test1.wear.comm.MapKeys
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
@@ -23,11 +25,10 @@ import kotlinx.coroutines.launch
  * 부분만 잘라서 현재 위치가 항상 가운데 오도록 보여 준다. 그래서 걷는 동안에는 이미지를 새로 받지 않고 워치가
  * 창만 옮기고, 처음 이미지의 중심에서 [REFETCH_DISTANCE_M] 이상 멀어졌을 때만 지금 위치 기준으로 다시 받는다.
  * 요청이 실패하면 1분 동안은 다시 요청하지 않아, 토큰 오류 같은 문제로 요청이 쏟아지지 않게 한다.
- * 워치의 WearApp/MapBackground가 같은 경로(PATH_MAP)와 값(imagePx 등)을 읽는다 - 같이 바꿔야 한다.
+ * 경로와 키는 워치와 함께 쓰는 wear-contract의 [DataLayerPaths.MAP], [MapKeys]를 쓴다.
  */
 object WearMapImageSender {
     private const val TAG = "WearMapImageSender"
-    const val PATH_MAP = "/safepath/map"
 
     /** 어두운 배경 지도. 라벨이 거슬리면 Mapbox Studio에서 만든 스타일 ID로 바꾸면 된다. */
     private const val MAP_STYLE = "mapbox/dark-v11"
@@ -104,14 +105,14 @@ object WearMapImageSender {
         val imageBytes = download(url) ?: return false
 
         val request =
-            PutDataMapRequest.create(PATH_MAP)
+            PutDataMapRequest.create(DataLayerPaths.MAP)
                 .apply {
-                    dataMap.putAsset("image", Asset.createFromBytes(imageBytes))
-                    dataMap.putDouble("centerLat", frame.centerLat)
-                    dataMap.putDouble("centerLng", frame.centerLng)
-                    dataMap.putDouble("zoom", frame.zoom)
-                    dataMap.putInt("imagePx", IMAGE_PX)
-                    dataMap.putLong("updatedAt", System.currentTimeMillis())
+                    dataMap.putAsset(MapKeys.IMAGE, Asset.createFromBytes(imageBytes))
+                    dataMap.putDouble(MapKeys.CENTER_LAT, frame.centerLat)
+                    dataMap.putDouble(MapKeys.CENTER_LNG, frame.centerLng)
+                    dataMap.putDouble(MapKeys.ZOOM, frame.zoom)
+                    dataMap.putInt(MapKeys.IMAGE_PX, IMAGE_PX)
+                    dataMap.putLong(MapKeys.UPDATED_AT, System.currentTimeMillis())
                 }
                 .asPutDataRequest()
                 .setUrgent()
