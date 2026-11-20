@@ -41,7 +41,8 @@ object WatchSosSender {
         Wearable.getNodeClient(context)
             .connectedNodes
             .addOnSuccessListener { nodes ->
-                Log.i(TAG, "Connected phone check: ${nodes.size} node(s) ${nodes.map { it.displayName }}")
+                val names = nodes.map { it.displayName }
+                Log.i(TAG, "Connected phone check: ${nodes.size} node(s) $names")
                 onResult(nodes.isNotEmpty())
             }
             .addOnFailureListener { e ->

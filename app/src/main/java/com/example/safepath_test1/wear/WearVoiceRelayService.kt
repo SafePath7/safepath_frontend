@@ -47,14 +47,22 @@ class WearVoiceRelayService : WearableListenerService() {
         }
     }
 
-    private fun handleChunk(bytes: ByteArray, format: String, seq: Long, capturedAt: Long, receivedAt: Long) {
+    private fun handleChunk(
+        bytes: ByteArray,
+        format: String,
+        seq: Long,
+        capturedAt: Long,
+        receivedAt: Long,
+    ) {
         if (seq >= 0) {
             val decision = voiceGate.check(seq, capturedAt)
             if (!decision.accept) {
                 Log.d(TAG, "Dropped voice chunk #$seq (${decision.reason})")
                 return
             }
-            if (decision.missing > 0) Log.w(TAG, "Missing ${decision.missing} voice chunk(s) before #$seq")
+            if (decision.missing > 0) {
+                Log.w(TAG, "Missing ${decision.missing} voice chunk(s) before #$seq")
+            }
         }
 
         val pcm =
@@ -74,8 +82,10 @@ class WearVoiceRelayService : WearableListenerService() {
         // delay는 폰과 워치 시계 차이가 섞여 있어 참고용이고, 늘어나는지만 보면 된다.
         Log.d(
             TAG,
-            "Voice #$seq: $format ${bytes.size}B -> ${pcm.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
-                "arrival gap=${arrivalGap}ms, window=${window.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
+            "Voice #$seq: $format ${bytes.size}B -> " +
+                "${pcm.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
+                "arrival gap=${arrivalGap}ms, " +
+                "window=${window.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
                 "watch->phone delay=${receivedAt - capturedAt}ms",
         )
         VoiceDebugRecorder.save(this, wav, capturedAt)

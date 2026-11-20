@@ -87,7 +87,11 @@ internal fun computeNextTurn(path: RoutePath, alongMeters: Double): NextTurn? {
         var before = i - 1
         while (before > 0 && cumulative[i] - cumulative[before] < TURN_LOOK_METERS) before--
         var after = i + 1
-        while (after < points.lastIndex && cumulative[after] - cumulative[i] < TURN_LOOK_METERS) after++
+        while (
+            after < points.lastIndex && cumulative[after] - cumulative[i] < TURN_LOOK_METERS
+        ) {
+            after++
+        }
         val angle = turnAngleDegrees(points[before], points[i], points[after])
         if (abs(angle) >= TURN_ANGLE_DEGREES) {
             val direction = if (angle > 0) TurnDirection.Right else TurnDirection.Left

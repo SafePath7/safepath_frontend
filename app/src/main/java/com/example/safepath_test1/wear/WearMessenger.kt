@@ -54,11 +54,17 @@ object WearMessenger {
             PutDataMapRequest.create(DataLayerPaths.STATUS).apply {
                 dataMap.putString(StatusKeys.STATE, state)
                 if (routeType != null) dataMap.putString(StatusKeys.ROUTE_TYPE, routeType)
-                if (distanceMeters != null) dataMap.putDouble(StatusKeys.DISTANCE_METERS, distanceMeters)
-                if (destinationName != null) dataMap.putString(StatusKeys.DESTINATION_NAME, destinationName)
+                if (distanceMeters != null) {
+                    dataMap.putDouble(StatusKeys.DISTANCE_METERS, distanceMeters)
+                }
+                if (destinationName != null) {
+                    dataMap.putString(StatusKeys.DESTINATION_NAME, destinationName)
+                }
                 routeLineGeoJson?.let { geoJson ->
                     val points = simplifyForWatch(parseGeoJsonPoints(geoJson))
-                    if (points.isNotEmpty()) dataMap.putString(StatusKeys.ROUTE_POINTS, encodePoints(points))
+                    if (points.isNotEmpty()) {
+                        dataMap.putString(StatusKeys.ROUTE_POINTS, encodePoints(points))
+                    }
                 }
                 destinationPoint?.let {
                     dataMap.putDouble(StatusKeys.DEST_LAT, it.latitude)
@@ -80,7 +86,8 @@ object WearMessenger {
             .addOnSuccessListener {
                 Log.i(
                     TAG,
-                    "DataClient synced state=$state routeType=$routeType destination=$destinationName",
+                    "DataClient synced state=$state routeType=$routeType " +
+                        "destination=$destinationName",
                 )
             }
             .addOnFailureListener { e -> Log.e(TAG, "DataClient sync failed for state=$state", e) }
@@ -152,7 +159,8 @@ object WearMessenger {
     ) {
         // 워치 미니맵 배경 지도 이미지: 사용자 위치(없으면 경로 시작점) 기준으로, 이미지 중심에서 충분히
         // 멀어졌을 때만 새로 받아서 보낸다(WearMapImageSender가 걸러 주므로 매번 불러도 된다).
-        val mapCenter = currentPoint ?: routeLineGeoJson?.let { parseGeoJsonPoints(it).firstOrNull() }
+        val mapCenter =
+            currentPoint ?: routeLineGeoJson?.let { parseGeoJsonPoints(it).firstOrNull() }
         mapCenter?.let { WearMapImageSender.sendIfNeeded(context, it) }
         send(
             context,
@@ -242,7 +250,9 @@ object WearMessenger {
     }
 
     private fun encodePoints(points: List<GeoPoint>): String =
-        points.joinToString(";") { String.format(Locale.US, "%.6f,%.6f", it.latitude, it.longitude) }
+        points.joinToString(";") {
+            String.format(Locale.US, "%.6f,%.6f", it.latitude, it.longitude)
+        }
 
     internal fun parseGeoJsonPoints(geoJson: String): List<GeoPoint> =
         try {
@@ -252,7 +262,9 @@ object WearMessenger {
                     val coordinate = coordinates.optJSONArray(index) ?: continue
                     val longitude = coordinate.optDouble(0, Double.NaN)
                     val latitude = coordinate.optDouble(1, Double.NaN)
-                    if (latitude.isFinite() && longitude.isFinite()) add(GeoPoint(latitude, longitude))
+                    if (latitude.isFinite() && longitude.isFinite()) {
+                        add(GeoPoint(latitude, longitude))
+                    }
                 }
             }
         } catch (e: Exception) {

@@ -65,7 +65,11 @@ internal data class AlertState(
      * (연결 확인보다 답장이 먼저 오는 경우 전달됨을 덮지 않는다.)
      */
     fun markNotConnected(requestedAt: Long): AlertState =
-        if (stage == AlertStage.Alerted && helpRequestedAt == requestedAt && delivery == SosDelivery.Sending) {
+        if (
+            stage == AlertStage.Alerted &&
+                helpRequestedAt == requestedAt &&
+                delivery == SosDelivery.Sending
+        ) {
             copy(delivery = SosDelivery.NotConnected)
         } else {
             this

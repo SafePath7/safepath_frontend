@@ -22,7 +22,13 @@ class WatchStateTest {
     @Test
     fun statusOrStale_turnsAnOldOrMissingTimestampIntoStale() {
         val found = RouteStatus.Found("경로", "1.2", null)
-        assertEquals(RouteStatus.Stale, statusOrStale(found, updatedAt = 1_000L, now = 2_000L + STALE_AFTER_MS))
-        assertEquals(RouteStatus.Stale, statusOrStale(RouteStatus.Idle, updatedAt = 0L, now = 2_000L))
+        assertEquals(
+            RouteStatus.Stale,
+            statusOrStale(found, updatedAt = 1_000L, now = 2_000L + STALE_AFTER_MS),
+        )
+        assertEquals(
+            RouteStatus.Stale,
+            statusOrStale(RouteStatus.Idle, updatedAt = 0L, now = 2_000L),
+        )
     }
 }

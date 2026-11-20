@@ -77,7 +77,8 @@ internal fun MainScreen(
             // 명세: 워치 하단 가운데, 화면 아래에서 22(384 기준) 위.
             WatchSosButton(
                 onClick = onSos,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = s.sosBottomMargin()),
+                modifier =
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = s.sosBottomMargin()),
             )
         }
     }

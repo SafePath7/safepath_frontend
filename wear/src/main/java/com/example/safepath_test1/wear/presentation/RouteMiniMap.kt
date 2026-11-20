@@ -75,9 +75,11 @@ internal class MapViewState {
     fun applyGesture(panXPx: Float, panYPx: Float, zoom: Float, widthPx: Float, nowMs: Long) {
         val metersPerPx = viewMeters / widthPx
         // 손가락을 오른쪽으로 끌면 지도가 오른쪽으로 가니까 보는 위치는 서쪽으로 간다.
-        panEastMeters = (panEastMeters - panXPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
+        panEastMeters =
+            (panEastMeters - panXPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
         // 손가락을 아래로 끌면 지도가 아래로 가니까 보는 위치는 북쪽으로 간다.
-        panNorthMeters = (panNorthMeters + panYPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
+        panNorthMeters =
+            (panNorthMeters + panYPx * metersPerPx).coerceIn(-MAX_PAN_METERS, MAX_PAN_METERS)
         // 두 손가락을 벌리면(zoom > 1) 더 가까이, 모으면 더 넓게.
         viewMeters = (viewMeters / zoom).coerceIn(MIN_VIEW_METERS, MAX_VIEW_METERS)
         lastTouchAt = nowMs
@@ -159,7 +161,11 @@ internal fun RouteMiniMap(
     LaunchedEffect(current) {
         val shown = glide.displayed()
         glide.from =
-            if (current != null && shown != null && haversineMeters(shown, current) <= MAX_GLIDE_METERS) {
+            if (
+                current != null &&
+                    shown != null &&
+                    haversineMeters(shown, current) <= MAX_GLIDE_METERS
+            ) {
                 shown
             } else {
                 current
@@ -225,7 +231,11 @@ internal fun RouteMiniMap(
         val solidStroke = Stroke(width = lineWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
         if (shownCurrent == null) {
-            drawPath(pathOf(routePoints.map { project(it) }), WatchColors.Route, style = solidStroke)
+            drawPath(
+                pathOf(routePoints.map { project(it) }),
+                WatchColors.Route,
+                style = solidStroke,
+            )
         } else {
             val split = routePath.progressAt(shownCurrent).traveledIndex
             val currentOffset = project(shownCurrent)

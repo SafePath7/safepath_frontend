@@ -59,8 +59,15 @@ internal class VoiceAacEncoder(
 
     init {
         val format =
-            MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRateHz, channels).apply {
-                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC,
+                sampleRateHz,
+                channels,
+            ).apply {
+                setInteger(
+                    MediaFormat.KEY_AAC_PROFILE,
+                    MediaCodecInfo.CodecProfileLevel.AACObjectLC,
+                )
                 setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16 * 1024)
             }
@@ -81,7 +88,8 @@ internal class VoiceAacEncoder(
         while (offset < pcm.size) {
             val index = codec.dequeueInputBuffer(10_000)
             if (index >= 0) {
-                val buffer = codec.getInputBuffer(index) ?: error("AAC encoder returned no input buffer")
+                val buffer =
+                    codec.getInputBuffer(index) ?: error("AAC encoder returned no input buffer")
                 buffer.clear()
                 // 16비트 표본이 반으로 잘리지 않게 짝수 바이트만 넣는다.
                 val length = minOf(buffer.remaining(), pcm.size - offset) and 1.inv()

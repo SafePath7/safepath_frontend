@@ -50,7 +50,11 @@ internal fun buildGuidanceUiState(
     return GuidanceUiState(
         ringProgress = live?.progress ?: 0f,
         summaryText =
-            if (live != null) "남은 ${formatDistance(live.remainingMeters)}" else "총 ${totalDistanceKm}km",
+            if (live != null) {
+                "남은 ${formatDistance(live.remainingMeters)}"
+            } else {
+                "총 ${totalDistanceKm}km"
+            },
         bannerDirection = if (arrived || turn == null) TurnDirection.Straight else turn.direction,
         bannerText =
             when {

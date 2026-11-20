@@ -42,7 +42,9 @@ internal class WatchDataReceiver(
         DataClient.OnDataChangedListener { dataEvents ->
             for (event in dataEvents) {
                 Log.i(TAG, "DataEvent type=${event.type} path=${event.dataItem.uri.path}")
-                if (event.type == DataEvent.TYPE_CHANGED) handle(event.dataItem, fromListener = true)
+                if (event.type == DataEvent.TYPE_CHANGED) {
+                    handle(event.dataItem, fromListener = true)
+                }
             }
             dataEvents.release()
         }
@@ -85,11 +87,13 @@ internal class WatchDataReceiver(
             }
             DataLayerPaths.RELEASE ->
                 if (fromListener) {
-                    onRelease(DataMapItem.fromDataItem(item).dataMap.getLong(ReleaseKeys.UPDATED_AT))
+                    val dataMap = DataMapItem.fromDataItem(item).dataMap
+                    onRelease(dataMap.getLong(ReleaseKeys.UPDATED_AT))
                 }
             DataLayerPaths.SOS_ACK ->
                 if (fromListener) {
-                    onSosAck(DataMapItem.fromDataItem(item).dataMap.getLong(SosAckKeys.TRIGGERED_AT))
+                    val dataMap = DataMapItem.fromDataItem(item).dataMap
+                    onSosAck(dataMap.getLong(SosAckKeys.TRIGGERED_AT))
                 }
         }
     }

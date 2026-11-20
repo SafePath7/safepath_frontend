@@ -57,7 +57,8 @@ class VoiceAacTest {
         val stereo = byteArrayOf(0xE8.toByte(), 0x03, 0x30, 0xF8.toByte())
         val mono = downmixToMono(stereo)
         assertEquals(2, mono.size)
-        assertEquals(-500, ((mono[1].toInt() shl 8) or (mono[0].toInt() and 0xFF)).toShort().toInt())
+        val sample = ((mono[1].toInt() shl 8) or (mono[0].toInt() and 0xFF)).toShort().toInt()
+        assertEquals(-500, sample)
     }
 
     @Test

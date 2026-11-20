@@ -60,8 +60,8 @@ class DataLayerContractTest {
         assertEquals(
             listOf("image", "centerLat", "centerLng", "zoom", "imagePx", "updatedAt"),
             listOf(
-                MapKeys.IMAGE, MapKeys.CENTER_LAT, MapKeys.CENTER_LNG, MapKeys.ZOOM, MapKeys.IMAGE_PX,
-                MapKeys.UPDATED_AT,
+                MapKeys.IMAGE, MapKeys.CENTER_LAT, MapKeys.CENTER_LNG, MapKeys.ZOOM,
+                MapKeys.IMAGE_PX, MapKeys.UPDATED_AT,
             ),
         )
         assertEquals("updatedAt", ReleaseKeys.UPDATED_AT)

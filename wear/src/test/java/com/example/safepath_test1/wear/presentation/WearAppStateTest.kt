@@ -31,7 +31,10 @@ class WearAppStateTest {
     @Test
     fun freshFoundStatus_startsNavigating() {
         val state = WearAppState()
-        state.onStatus(StatusUpdate(updatedAt = 1_000L, status = found, routeMap = map), now = 2_000L)
+        state.onStatus(
+            StatusUpdate(updatedAt = 1_000L, status = found, routeMap = map),
+            now = 2_000L,
+        )
         assertEquals(found, state.status)
         assertNotNull(state.routeMap)
         assertTrue(state.isNavigating)

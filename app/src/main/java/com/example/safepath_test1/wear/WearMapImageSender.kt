@@ -118,7 +118,9 @@ object WearMapImageSender {
                 .setUrgent()
         Wearable.getDataClient(context)
             .putDataItem(request)
-            .addOnSuccessListener { Log.i(TAG, "Map image sent to watch (${imageBytes.size} bytes)") }
+            .addOnSuccessListener {
+                Log.i(TAG, "Map image sent to watch (${imageBytes.size} bytes)")
+            }
             .addOnFailureListener { e -> Log.e(TAG, "Failed to send map image to watch", e) }
         return true
     }
