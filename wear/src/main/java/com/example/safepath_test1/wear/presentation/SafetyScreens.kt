@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.Text
+import com.example.safepath_test1.wear.state.SosDelivery
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -241,15 +242,23 @@ internal fun CheckInScreen(remainingMs: Long, totalMs: Long, onOkay: () -> Unit,
 /**
  * W-02 위험상황. 도움 요청 버튼, SOS, 확인 질문 시간 초과 중 하나로 표시된다.
  *
- * 지금은 폰 알림까지만 전달되므로(WatchSosSender) 문구도 그 범위로 적었다. 명세대로 해제는 휴대폰에서 하고,
+ * 지금은 폰 알림까지만 전달되므로(WatchSosSender) 문구도 그 범위로 적었다. [delivery]에 따라 문구가 바뀐다:
+ * 보내는 중(폰 답장 대기), 전달됨(폰이 받았다고 답장), 연결 안 됨(보낼 때 연결된 폰이 없었음, 연결되면 자동으로 넘어감).
+ * 명세대로 해제는 휴대폰에서 하고,
  * 폰이 보낸 해제 신호를 워치가 받으면 이 화면이 닫힌다(WearApp). 폰 쪽 해제 기능이 생기기 전까지는
  * "휴대폰에서 해제" 버튼을 길게 누르면 [onTestRelease]로 해제를 흉내 낼 수 있다(테스트용, 폰 연동 후 제거).
  */
 @Composable
-internal fun GuardianAlertedScreen(requestedAt: Long, onTestRelease: () -> Unit) {
+internal fun GuardianAlertedScreen(requestedAt: Long, delivery: SosDelivery, onTestRelease: () -> Unit) {
     val s = rememberWatchScale()
     val time =
         remember(requestedAt) { SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(requestedAt)) }
+    val (title, detail) =
+        when (delivery) {
+            SosDelivery.Sending -> "보호자에게 알리는 중" to "휴대폰으로 보내고 있어요"
+            SosDelivery.Delivered -> "보호자에게 알렸어요" to "휴대폰으로 긴급 알림을 보냈어요"
+            SosDelivery.NotConnected -> "아직 전달되지 않았어요" to "휴대폰과 연결되면 자동으로 보내요"
+        }
     val buttonShape = RoundedCornerShape(50)
     WatchScreenScaffold(ringProgress = 1f, ringColor = Color.White, background = WatchColors.DangerBg) {
         Column(
@@ -265,14 +274,14 @@ internal fun GuardianAlertedScreen(requestedAt: Long, onTestRelease: () -> Unit)
             }
             Spacer(Modifier.height(s.dp(8)))
             Text(
-                text = "보호자에게 알렸어요",
+                text = title,
                 color = Color.White,
                 fontSize = s.sp(24),
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = "휴대폰으로 긴급 알림을 보냈어요",
+                text = detail,
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = s.sp(13),
                 textAlign = TextAlign.Center,

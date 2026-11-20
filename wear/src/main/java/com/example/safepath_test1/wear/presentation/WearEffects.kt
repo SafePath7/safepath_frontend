@@ -65,7 +65,7 @@ internal fun VoiceCaptureEffect(context: Context, active: Boolean) {
     }
 }
 
-/** 폰이 보내는 값(상태, 지도 이미지, 해제 신호)을 받아 [state]에 반영한다. 받는 방법과 순서 규칙은 WatchDataReceiver에 있다. */
+/** 폰이 보내는 값(상태, 지도 이미지, 해제 신호, SOS 답장)을 받아 [state]에 반영한다. 받는 방법과 순서 규칙은 WatchDataReceiver에 있다. */
 @Composable
 internal fun DataLayerEffect(context: Context, state: WearAppState) {
     val scope = rememberCoroutineScope()
@@ -80,6 +80,7 @@ internal fun DataLayerEffect(context: Context, state: WearAppState) {
                 },
                 onMapImage = state::onMapImage,
                 onRelease = state::onRelease,
+                onSosAck = state::onSosAck,
             )
         receiver.start()
         onDispose { receiver.stop() }

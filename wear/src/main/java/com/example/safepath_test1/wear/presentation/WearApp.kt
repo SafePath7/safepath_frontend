@@ -24,9 +24,14 @@ fun WearApp() {
     val state = rememberWearAppState()
 
     // 보호자 연동 전이라 SOS 버튼과 같은 경로(워치 → 폰 알림)로 보낸다.
+    // 화면의 요청 시각과 보내는 SOS의 시각을 같은 값으로 맞춰야 폰의 답장(SOS_ACK)을 이 위험상황과 짝지을 수 있다.
     val requestHelp: () -> Unit = {
-        WatchSosSender.send(context)
-        state.requestHelp(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        state.requestHelp(now)
+        WatchSosSender.send(context, triggeredAt = now)
+        WatchSosSender.checkPhoneConnected(context) { connected ->
+            if (!connected) state.markSosNotConnected(now)
+        }
     }
 
     SensorEffect(context)
@@ -49,6 +54,7 @@ fun WearApp() {
                 AlertStage.Alerted ->
                     GuardianAlertedScreen(
                         requestedAt = state.alert.helpRequestedAt,
+                        delivery = state.alert.delivery,
                         onTestRelease = state::dismissAlert,
                     )
                 AlertStage.None ->

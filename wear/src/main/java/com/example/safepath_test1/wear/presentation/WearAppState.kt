@@ -91,6 +91,16 @@ internal class WearAppState {
         alert = alert.dismiss()
     }
 
+    /** 폰이 SOS를 받았다는 답장. 지금 위험상황의 것이면 전달됨으로 바꾼다. */
+    fun onSosAck(triggeredAt: Long) {
+        alert = alert.acknowledgedBy(triggeredAt)
+    }
+
+    /** 요청 시각이 [requestedAt]인 SOS를 보낼 때 연결된 폰이 없었다. */
+    fun markSosNotConnected(requestedAt: Long) {
+        alert = alert.markNotConnected(requestedAt)
+    }
+
     /** 폰의 해제 신호가 이 위험상황의 것이면 평소 화면으로 돌아간다. */
     fun releaseIfSignalled() {
         alert = alert.releasedBy(releaseSignalAt)
