@@ -7,7 +7,7 @@ import org.junit.Test
 
 class WatchStateTest {
     @Test
-    fun staleRules() {
+    fun isStatusStale_rules() {
         assertTrue(isStatusStale(updatedAt = 0L, now = 1_000L))
         assertFalse(isStatusStale(updatedAt = 1_000L, now = 1_000L + STALE_AFTER_MS))
         assertTrue(isStatusStale(updatedAt = 1_000L, now = 1_001L + STALE_AFTER_MS))

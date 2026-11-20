@@ -37,7 +37,7 @@ class TurnGuidanceTest {
     }
 
     @Test
-    fun distanceShrinksAsWeWalk() {
+    fun computeNextTurn_distanceShrinksAsWeWalk() {
         val turn = computeNextTurn(rightTurn, alongMeters = 50.0)!!
         assertEquals(TurnDirection.Right, turn.direction)
         assertEquals(61.19, turn.distanceMeters, 1.0)

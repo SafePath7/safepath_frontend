@@ -7,7 +7,7 @@ import org.junit.Test
 
 class AlertFlowTest {
     @Test
-    fun startsInTheNormalStage() {
+    fun newState_startsInTheNormalStage() {
         assertEquals(AlertStage.None, AlertState().stage)
     }
 

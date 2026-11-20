@@ -5,7 +5,7 @@ import org.junit.Test
 
 class MotionSampleAccumulatorTest {
     @Test
-    fun noSampleUntilBothSensorsAreReady() {
+    fun sample_waitsUntilBothSensorsAreReady() {
         val samples = MotionSampleAccumulator()
         assertNull(samples.updateAcceleration(1f, 2f, 3f, 0L, 100L))
         val sample = samples.updateRotation(4f, 5f, 6f, 1L, 101L)!!
@@ -15,14 +15,14 @@ class MotionSampleAccumulatorTest {
     }
 
     @Test
-    fun eitherSensorCanArriveFirst() {
+    fun sample_acceptsEitherSensorFirst() {
         val samples = MotionSampleAccumulator()
         assertNull(samples.updateRotation(4f, 5f, 6f, 0L, 100L))
         assertNotNull(samples.updateAcceleration(1f, 2f, 3f, 1L, 101L))
     }
 
     @Test
-    fun alternatingSensorEventsDoNotDoubleTheRate() {
+    fun alternatingEvents_doNotDoubleTheRate() {
         val samples = MotionSampleAccumulator()
         samples.updateAcceleration(1f, 2f, 3f, 0L, 100L)
         assertNotNull(samples.updateRotation(4f, 5f, 6f, 0L, 100L))
@@ -33,7 +33,7 @@ class MotionSampleAccumulatorTest {
     }
 
     @Test
-    fun restartRequiresFreshReadingsFromBothSensors() {
+    fun reset_requiresFreshReadingsFromBothSensors() {
         val samples = MotionSampleAccumulator()
         samples.updateAcceleration(1f, 2f, 3f, 0L, 100L)
         samples.updateRotation(4f, 5f, 6f, 1L, 101L)
@@ -43,7 +43,7 @@ class MotionSampleAccumulatorTest {
     }
 
     @Test
-    fun invalidSensorValuesAreNotSent() {
+    fun invalidValues_areNotSent() {
         val samples = MotionSampleAccumulator()
         assertNull(samples.updateAcceleration(Float.NaN, 2f, 3f, 0L, 100L))
         assertNull(samples.updateRotation(4f, 5f, 6f, 1L, 101L))

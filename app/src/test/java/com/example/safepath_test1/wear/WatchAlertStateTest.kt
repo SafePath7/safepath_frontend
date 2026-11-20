@@ -12,7 +12,7 @@ class WatchAlertStateTest {
     }
 
     @Test
-    fun startsOff() {
+    fun newState_startsOff() {
         assertNull(WatchAlertState.requestedAt.value)
     }
 
