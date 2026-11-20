@@ -8,9 +8,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : ComponentActivity() {
-    // POST_NOTIFICATIONS: so WatchLaunchListenerService's fallback notification (phone -> watch
-    // auto-open) can actually show on Android 13+, where it's a runtime permission.
-    // RECORD_AUDIO: so WatchVoiceRecorder can capture mic audio while route guidance is active.
+    // POST_NOTIFICATIONS: Android 13+에서는 실행 중 권한이라, WatchLaunchListenerService의 대체 알림
+    // (폰 → 워치 자동 실행)이 실제로 뜨게 하려면 필요하다.
+    // RECORD_AUDIO: 길안내 중 WatchVoiceRecorder가 마이크로 녹음하는 데 필요하다.
     private val requestPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
 

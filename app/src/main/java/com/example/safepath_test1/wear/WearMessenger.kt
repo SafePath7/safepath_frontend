@@ -31,9 +31,8 @@ object WearMessenger {
     private const val TAG = "WearMessenger"
 
     /**
-     * Route polyline is downsampled to this many points before being sent to the watch - plenty
-     * for a small watch screen, and keeps the DataItem payload tiny regardless of how long the
-     * actual walking route is.
+     * 경로 선을 워치로 보내기 전에 이 개수 이하의 점으로 줄인다. 작은 워치 화면에는 충분하고,
+     * 실제 걷는 경로가 아무리 길어도 DataItem 크기를 작게 유지한다.
      */
     private const val MAX_ROUTE_POINTS = 150
 
@@ -136,12 +135,10 @@ object WearMessenger {
     }
 
     /**
-     * `routeLineGeoJson`/`destinationPoint` describe the route's shape and only need to be resent
-     * when the active route changes; `currentPoint` is the traveler's live GPS position and is
-     * meant to be resent every time it updates (SafePathApp's location listener fires roughly
-     * every 5s/5m) so the watch's mini-map can move a current-location dot as they walk - a
-     * one-time snapshot of the route isn't the point, live position is (same reason the
-     * guardian-facing journey screen tracks a live position rather than a static route).
+     * `routeLineGeoJson`과 `destinationPoint`는 경로 모양이라 선택한 경로가 바뀔 때만 다시 보내면 된다.
+     * `currentPoint`는 걷는 사람의 실시간 GPS 위치라 갱신될 때마다(SafePathApp의 위치 리스너, 약 5초·5m마다)
+     * 다시 보내서 워치 미니맵의 현재 위치 점이 따라 움직이게 한다. 경로를 한 번 찍어 보내는 것이 아니라
+     * 실시간 위치가 핵심이다(보호자용 귀가 화면이 고정된 경로가 아니라 실시간 위치를 따라가는 것과 같은 이유).
      */
     fun sendRouteFound(
         context: Context,

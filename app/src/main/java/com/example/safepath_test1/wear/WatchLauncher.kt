@@ -10,15 +10,14 @@ import com.google.android.gms.wearable.Wearable
 private const val TAG = "WatchLauncher"
 
 /**
- * Tells the paired watch to open the SafePath watch app, if a watch is currently connected.
- * Meant to be called once when the phone app starts.
+ * 연결된 워치가 있으면 워치의 SafePath 앱을 열라고 알린다. 폰 앱이 켜질 때 한 번 부른다.
  *
- * Uses DataClient (not MessageClient), same as WearMessenger: MessageClient's sendMessage() kept
- * failing real-device testing with "Failed to deliver message to AppKey", while DataClient +
- * matching applicationId is the combination confirmed working real-device + real-device.
+ * WearMessenger와 같이 MessageClient가 아니라 DataClient를 쓴다. 실기기 테스트에서 MessageClient의
+ * sendMessage()는 "Failed to deliver message to AppKey"로 계속 실패했고, DataClient + 같은 applicationId
+ * 조합만 실기기 두 대에서 동작이 확인됐다.
  *
- * `requestedAt` is included so DataClient doesn't dedupe this against a previous launch request
- * (it only fires onDataChanged when something in the DataMap actually changes).
+ * DataClient는 DataMap 내용이 실제로 바뀔 때만 onDataChanged를 부르므로, 이전 실행 요청과 같은 것으로
+ * 걸러지지 않게 매번 요청 시각(`requestedAt`)을 담는다.
  */
 object WatchLauncher {
 

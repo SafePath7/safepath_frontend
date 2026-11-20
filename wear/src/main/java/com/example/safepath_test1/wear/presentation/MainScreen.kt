@@ -68,14 +68,10 @@ internal fun MainScreen(
             }
         }
 
-        // Pinned to the screen's own bottom-center rather than laid out inside the Column
-        // above, so it can't get pushed off-screen by how much the rest of that content
-        // needs (RouteMiniMap + up to 3 text lines already run close to a 40mm watch's
-        // visible height, with nothing there to scroll it). Single tap sends immediately -
-        // this is an emergency control, not a settings toggle, so a hold-to-confirm gesture
-        // would only slow down the one moment it needs to be fast. Only reaches the paired
-        // phone for now (WatchSosSender -> WearSosRelayService); see that service's doc
-        // comment for why it doesn't reach a guardian yet.
+        // 위 Column 안이 아니라 화면 아래 가운데에 고정한다. RouteMiniMap과 글자 최대 3줄만으로도 40mm 워치의
+        // 보이는 높이에 거의 차고 스크롤도 없어서, Column 안에 두면 화면 밖으로 밀려날 수 있다.
+        // 한 번 누르면 바로 보낸다. 설정 버튼이 아니라 긴급 버튼이라, 길게 눌러 확인하게 하면 가장 빨라야 할
+        // 순간만 느려진다. 지금은 짝지어진 폰까지만 전달된다(WatchSosSender → WearSosRelayService).
         if (isNavigating) {
             val s = rememberWatchScale()
             // 명세: 워치 하단 가운데, 화면 아래에서 22(384 기준) 위.

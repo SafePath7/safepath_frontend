@@ -1,6 +1,6 @@
 package com.example.safepath_test1.wear.sensors
 
-/** Latest readings from both sensors. timestamp is wall-clock milliseconds for the phone. */
+/** 두 센서의 최신 측정값. timestamp는 폰에서 쓰는 실제 시각(밀리초)이다. */
 data class MotionData(
     val accelX: Float,
     val accelY: Float,
@@ -11,7 +11,7 @@ data class MotionData(
     val timestamp: Long,
 )
 
-/** Limits combined updates to 20 Hz using the sensor event's monotonic timestamp. */
+/** 센서 이벤트의 단조 증가 시각으로 합친 값의 갱신을 20Hz로 제한한다. */
 internal class MotionSampleAccumulator {
     private var acceleration: Triple<Float, Float, Float>? = null
     private var rotation: Triple<Float, Float, Float>? = null
