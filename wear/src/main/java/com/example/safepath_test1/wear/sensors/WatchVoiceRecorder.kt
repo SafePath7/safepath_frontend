@@ -64,7 +64,8 @@ class WatchVoiceRecorder(private val context: Context) {
             return
         }
 
-        val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE_HZ, CHANNEL_CONFIG, AUDIO_FORMAT)
+        val minBufferSize =
+            AudioRecord.getMinBufferSize(SAMPLE_RATE_HZ, CHANNEL_CONFIG, AUDIO_FORMAT)
         if (minBufferSize <= 0) {
             Log.e(TAG, "AudioRecord.getMinBufferSize failed: $minBufferSize")
             return
@@ -175,7 +176,8 @@ class WatchVoiceRecorder(private val context: Context) {
                 offset += read
             }
             if (offset > 0) {
-                _audioChunks.emit(if (offset == chunk.size) chunk.copyOf() else chunk.copyOf(offset))
+                val emitted = if (offset == chunk.size) chunk.copyOf() else chunk.copyOf(offset)
+                _audioChunks.emit(emitted)
                 emittedAny = true
             }
             if (failed) {

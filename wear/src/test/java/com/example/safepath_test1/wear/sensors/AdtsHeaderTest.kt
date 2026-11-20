@@ -8,7 +8,8 @@ class AdtsHeaderTest {
     @Test
     fun header_for16kMonoLc_matchesTheStandardLayout() {
         val header = adtsHeader(frameLength = 107, sampleRateHz = 16_000, channels = 1)
-        val expected = intArrayOf(0xFF, 0xF1, 0x60, 0x40, 0x0D, 0x7F, 0xFC).map { it.toByte() }.toByteArray()
+        val expected =
+            intArrayOf(0xFF, 0xF1, 0x60, 0x40, 0x0D, 0x7F, 0xFC).map { it.toByte() }.toByteArray()
         assertArrayEquals(expected, header)
     }
 

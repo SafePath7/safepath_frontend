@@ -61,8 +61,11 @@ internal class VoiceWindowBuffer(
         lastCapturedAt = maxOf(lastCapturedAt, capturedAt)
         val combined = window + pcm
         window =
-            if (combined.size > maxBytes) combined.copyOfRange(combined.size - maxBytes, combined.size)
-            else combined
+            if (combined.size > maxBytes) {
+                combined.copyOfRange(combined.size - maxBytes, combined.size)
+            } else {
+                combined
+            }
         return window
     }
 }

@@ -67,7 +67,11 @@ internal class WearAppState {
 
     /** 폰에서 마지막으로 받은 값이 너무 오래됐으면 연결 끊김으로 바꾼다. 아직 아무것도 못 받았으면 그대로 둔다. */
     fun markStaleIfNeeded(now: Long = System.currentTimeMillis()) {
-        if (lastReceivedAt > 0 && isStatusStale(lastReceivedAt, now) && status !is RouteStatus.Stale) {
+        if (
+            lastReceivedAt > 0 &&
+                isStatusStale(lastReceivedAt, now) &&
+                status !is RouteStatus.Stale
+        ) {
             status = RouteStatus.Stale
         }
     }

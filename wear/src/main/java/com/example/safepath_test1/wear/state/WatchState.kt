@@ -4,7 +4,7 @@ import com.example.safepath_test1.wear.geo.LatLng
 import com.example.safepath_test1.wear.geo.RoutePath
 import com.example.safepath_test1.wear.geo.RouteStep
 
-/** If no update has arrived from the phone in this long, treat it as stale/disconnected. */
+/** 폰에서 이 시간 동안 아무 값도 오지 않으면 오래됨(연결 끊김)으로 본다. */
 internal const val STALE_AFTER_MS = 10 * 60 * 1000L
 
 /** 폰에서 마지막으로 받은 값의 시각([updatedAt])이 너무 오래됐거나 아예 없으면 연결이 끊긴 것으로 본다. */
@@ -30,7 +30,7 @@ internal sealed class RouteStatus {
     data object Stale : RouteStatus()
 }
 
-/** Route shape + live position for RouteMiniMap, decoded from WearMessenger's DataMap fields. */
+/** RouteMiniMap이 그릴 경로 모양과 실시간 위치. WearMessenger가 보낸 DataMap 값을 풀어 만든다. */
 internal data class RouteMapState(
     val points: List<LatLng>,
     val destination: LatLng?,

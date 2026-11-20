@@ -37,7 +37,7 @@ class TurnGuidanceTest {
     }
 
     @Test
-    fun distanceShrinksAsWeWalk() {
+    fun computeNextTurn_distanceShrinksAsWeWalk() {
         val turn = computeNextTurn(rightTurn, alongMeters = 50.0)!!
         assertEquals(TurnDirection.Right, turn.direction)
         assertEquals(61.19, turn.distanceMeters, 1.0)
@@ -94,7 +94,10 @@ class TurnGuidanceTest {
 
     @Test
     fun decodeRouteSteps_readsThePhoneFormat() {
-        val decoded = decodeRouteSteps("37.000000,127.000000,depart,;37.001000,127.000000,turn,slight left")
+        val decoded =
+            decodeRouteSteps(
+                "37.000000,127.000000,depart,;37.001000,127.000000,turn,slight left"
+            )
         assertEquals(2, decoded.size)
         assertEquals("depart", decoded[0].type)
         assertEquals("", decoded[0].modifier)

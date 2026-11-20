@@ -12,7 +12,8 @@ class GuidanceUiStateTest {
     private val straight = RoutePath(listOf(37.000 to 127.0, 37.001 to 127.0, 37.002 to 127.0))
 
     // 북쪽으로 약 111m 가다가 동쪽으로 약 107m: 모양만 보면 모퉁이에서 우회전.
-    private val rightTurn = RoutePath(listOf(37.000 to 127.000, 37.001 to 127.000, 37.001 to 127.0012))
+    private val rightTurn =
+        RoutePath(listOf(37.000 to 127.000, 37.001 to 127.000, 37.001 to 127.0012))
 
     @Test
     fun noRoute_showsTotalDistanceAndWaitsForPosition() {

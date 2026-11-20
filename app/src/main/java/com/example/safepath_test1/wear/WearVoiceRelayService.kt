@@ -20,8 +20,7 @@ private val voiceExecutor = Executors.newSingleThreadExecutor()
 private var lastArrivalAt = 0L
 
 /**
- * Receives each audio chunk relayed from the watch (WatchVoiceRecorder + WatchVoiceSender,
- * wear module) over the Wearable Data Layer.
+ * 워치(wear 모듈의 WatchVoiceRecorder + WatchVoiceSender)가 Wearable Data Layer로 보낸 음성 조각을 하나씩 받는다.
  *
  * 워치는 16kHz 모노 소리를 1초 단위로 AAC 압축해서 보낸다. 여기서 원본 소리(PCM)로 풀고, 조각을 이어 붙여
  * "최근 3초"를 만들고 WAV로 바꾼다. 밀려서 늦게 온 조각은 버린다(VoiceChunkGate).
@@ -48,14 +47,22 @@ class WearVoiceRelayService : WearableListenerService() {
         }
     }
 
-    private fun handleChunk(bytes: ByteArray, format: String, seq: Long, capturedAt: Long, receivedAt: Long) {
+    private fun handleChunk(
+        bytes: ByteArray,
+        format: String,
+        seq: Long,
+        capturedAt: Long,
+        receivedAt: Long,
+    ) {
         if (seq >= 0) {
             val decision = voiceGate.check(seq, capturedAt)
             if (!decision.accept) {
                 Log.d(TAG, "Dropped voice chunk #$seq (${decision.reason})")
                 return
             }
-            if (decision.missing > 0) Log.w(TAG, "Missing ${decision.missing} voice chunk(s) before #$seq")
+            if (decision.missing > 0) {
+                Log.w(TAG, "Missing ${decision.missing} voice chunk(s) before #$seq")
+            }
         }
 
         val pcm =
@@ -75,8 +82,10 @@ class WearVoiceRelayService : WearableListenerService() {
         // delay는 폰과 워치 시계 차이가 섞여 있어 참고용이고, 늘어나는지만 보면 된다.
         Log.d(
             TAG,
-            "Voice #$seq: $format ${bytes.size}B -> ${pcm.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
-                "arrival gap=${arrivalGap}ms, window=${window.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
+            "Voice #$seq: $format ${bytes.size}B -> " +
+                "${pcm.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
+                "arrival gap=${arrivalGap}ms, " +
+                "window=${window.size * 1000L / VOICE_BYTES_PER_SECOND}ms, " +
                 "watch->phone delay=${receivedAt - capturedAt}ms",
         )
         VoiceDebugRecorder.save(this, wav, capturedAt)

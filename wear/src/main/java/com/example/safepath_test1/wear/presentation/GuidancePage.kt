@@ -32,7 +32,8 @@ import kotlinx.coroutines.flow.collectLatest
 
 /**
  * UI-W1(W-01) 경로 안내 페이지(전체 화면 지도 초안).
- * 화면 전체를 지도가 채우고(한 손가락으로 끌어서 둘러보기, 두 손가락 핀치로 확대/축소, 두 번 탭하면 내 위치로) 그 위에 링, 시각, 이동중 배지, 위쪽 회전 안내 상자(y80),
+ * 화면 전체를 지도가 채우고(한 손가락으로 끌어서 둘러보기, 두 손가락 핀치로 확대/축소,
+ * 두 번 탭하면 내 위치로) 그 위에 링, 시각, 이동중 배지, 위쪽 회전 안내 상자(y80),
  * 아래쪽에 남은 거리 한 줄을 올린다. 위치는 명세의 384dp 원형 기준을 화면 크기에 맞게 줄여 쓴다.
  * 다음 회전은 폰이 회전 안내 목록(routeSteps)을 보내면 그걸 쓰고, 없으면 경로 모양에서 워치가 추측한다.
  * SOS 버튼은 MainScreen이 하단에 따로 붙인다.
@@ -108,7 +109,9 @@ internal fun GuidancePage(
                 .fillMaxWidth()
                 .height(s.dp(110))
                 .background(
-                    Brush.verticalGradient(listOf(WatchColors.Bg.copy(alpha = 0.85f), Color.Transparent))
+                    Brush.verticalGradient(
+                        listOf(WatchColors.Bg.copy(alpha = 0.85f), Color.Transparent)
+                    )
                 )
         )
         Box(
@@ -116,7 +119,9 @@ internal fun GuidancePage(
                 .fillMaxWidth()
                 .height(panelHeight)
                 .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, WatchColors.Bg.copy(alpha = 0.92f)))
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, WatchColors.Bg.copy(alpha = 0.92f))
+                    )
                 )
         )
         WatchRing(progress = ui.ringProgress, color = WatchColors.Route)

@@ -20,7 +20,7 @@ class WearAppStateTest {
     private val map = RouteMapState(listOf(37.0 to 127.0, 37.001 to 127.0), null, null)
 
     @Test
-    fun startsIdleWithNoAlert() {
+    fun newState_startsIdleWithNoAlert() {
         val state = WearAppState()
         assertEquals(RouteStatus.Idle, state.status)
         assertNull(state.routeMap)
@@ -31,7 +31,10 @@ class WearAppStateTest {
     @Test
     fun freshFoundStatus_startsNavigating() {
         val state = WearAppState()
-        state.onStatus(StatusUpdate(updatedAt = 1_000L, status = found, routeMap = map), now = 2_000L)
+        state.onStatus(
+            StatusUpdate(updatedAt = 1_000L, status = found, routeMap = map),
+            now = 2_000L,
+        )
         assertEquals(found, state.status)
         assertNotNull(state.routeMap)
         assertTrue(state.isNavigating)

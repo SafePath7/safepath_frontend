@@ -24,7 +24,13 @@ class MapViewStateTest {
     @Test
     fun drag_isLimitedToTheMaximumPan() {
         val view = MapViewState()
-        view.applyGesture(panXPx = 10_000f, panYPx = -10_000f, zoom = 1f, widthPx = 200f, nowMs = 1L)
+        view.applyGesture(
+            panXPx = 10_000f,
+            panYPx = -10_000f,
+            zoom = 1f,
+            widthPx = 200f,
+            nowMs = 1L,
+        )
         assertEquals(-MAX_PAN_METERS, view.panEastMeters, 0.0001)
         assertEquals(-MAX_PAN_METERS, view.panNorthMeters, 0.0001)
     }

@@ -12,14 +12,14 @@ class WearMapFrameTest {
     private val center = GeoPoint(35.85, 128.49)
 
     @Test
-    fun frameIsCenteredOnTheGivenPoint() {
+    fun mapFrameAround_centersOnTheGivenPoint() {
         val frame = mapFrameAround(center, metersPerPixel = 2.5)
         assertEquals(center.latitude, frame.centerLat, 0.0)
         assertEquals(center.longitude, frame.centerLng, 0.0)
     }
 
     @Test
-    fun oneMapPixelIsAboutTheRequestedMeters() {
+    fun mapFrameAround_onePixelIsAboutTheRequestedMeters() {
         val frame = mapFrameAround(center, metersPerPixel = 2.5)
         val actual =
             EARTH_CIRCUMFERENCE_M * cos(Math.toRadians(center.latitude)) /
@@ -29,13 +29,13 @@ class WearMapFrameTest {
     }
 
     @Test
-    fun zoomHasAtMostTwoDecimals() {
+    fun zoom_hasAtMostTwoDecimals() {
         val zoom = mapFrameAround(center, metersPerPixel = 2.5).zoom
         assertEquals(floor(zoom * 100) / 100, zoom, 1e-9)
     }
 
     @Test
-    fun zoomIsLimitedToTheAllowedRange() {
+    fun zoom_isLimitedToTheAllowedRange() {
         assertEquals(18.0, mapFrameAround(center, metersPerPixel = 0.0001).zoom, 0.0)
         assertEquals(10.0, mapFrameAround(center, metersPerPixel = 100_000.0).zoom, 0.0)
     }

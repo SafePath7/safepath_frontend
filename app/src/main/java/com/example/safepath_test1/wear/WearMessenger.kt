@@ -20,20 +20,19 @@ import org.json.JSONObject
  * 워치로 보내는 회전 안내 한 단계. Mapbox Directions 응답(steps=true)의 각 step에서
  * maneuver.location을 [point]로, maneuver.type을 [type]으로, maneuver.modifier를 [modifier]로 그대로 옮긴다.
  */
-data class WearRouteStep(val point: GeoPoint, val type: String, val modifier: String?)
+internal data class WearRouteStep(val point: GeoPoint, val type: String, val modifier: String?)
 
 /**
  * 동일한 applicationId를 사용하는 휴대폰과 워치 사이에 DataClient로 경로 상태를 전송한다.
  * MessageClient는 실기기에서 전송 오류가 발생해, 실기기에서 확인된 DataClient를 사용한다.
  * 동일한 데이터는 중복 전송되지 않으므로 매 호출마다 updatedAt을 포함한다.
  */
-object WearMessenger {
+internal object WearMessenger {
     private const val TAG = "WearMessenger"
 
     /**
-     * Route polyline is downsampled to this many points before being sent to the watch - plenty
-     * for a small watch screen, and keeps the DataItem payload tiny regardless of how long the
-     * actual walking route is.
+     * 경로 선을 워치로 보내기 전에 이 개수 이하의 점으로 줄인다. 작은 워치 화면에는 충분하고,
+     * 실제 걷는 경로가 아무리 길어도 DataItem 크기를 작게 유지한다.
      */
     private const val MAX_ROUTE_POINTS = 150
 
@@ -55,11 +54,17 @@ object WearMessenger {
             PutDataMapRequest.create(DataLayerPaths.STATUS).apply {
                 dataMap.putString(StatusKeys.STATE, state)
                 if (routeType != null) dataMap.putString(StatusKeys.ROUTE_TYPE, routeType)
-                if (distanceMeters != null) dataMap.putDouble(StatusKeys.DISTANCE_METERS, distanceMeters)
-                if (destinationName != null) dataMap.putString(StatusKeys.DESTINATION_NAME, destinationName)
+                if (distanceMeters != null) {
+                    dataMap.putDouble(StatusKeys.DISTANCE_METERS, distanceMeters)
+                }
+                if (destinationName != null) {
+                    dataMap.putString(StatusKeys.DESTINATION_NAME, destinationName)
+                }
                 routeLineGeoJson?.let { geoJson ->
                     val points = simplifyForWatch(parseGeoJsonPoints(geoJson))
-                    if (points.isNotEmpty()) dataMap.putString(StatusKeys.ROUTE_POINTS, encodePoints(points))
+                    if (points.isNotEmpty()) {
+                        dataMap.putString(StatusKeys.ROUTE_POINTS, encodePoints(points))
+                    }
                 }
                 destinationPoint?.let {
                     dataMap.putDouble(StatusKeys.DEST_LAT, it.latitude)
@@ -81,7 +86,8 @@ object WearMessenger {
             .addOnSuccessListener {
                 Log.i(
                     TAG,
-                    "DataClient synced state=$state routeType=$routeType destination=$destinationName",
+                    "DataClient synced state=$state routeType=$routeType " +
+                        "destination=$destinationName",
                 )
             }
             .addOnFailureListener { e -> Log.e(TAG, "DataClient sync failed for state=$state", e) }
@@ -136,12 +142,10 @@ object WearMessenger {
     }
 
     /**
-     * `routeLineGeoJson`/`destinationPoint` describe the route's shape and only need to be resent
-     * when the active route changes; `currentPoint` is the traveler's live GPS position and is
-     * meant to be resent every time it updates (SafePathApp's location listener fires roughly
-     * every 5s/5m) so the watch's mini-map can move a current-location dot as they walk - a
-     * one-time snapshot of the route isn't the point, live position is (same reason the
-     * guardian-facing journey screen tracks a live position rather than a static route).
+     * `routeLineGeoJson`과 `destinationPoint`는 경로 모양이라 선택한 경로가 바뀔 때만 다시 보내면 된다.
+     * `currentPoint`는 걷는 사람의 실시간 GPS 위치라 갱신될 때마다(SafePathApp의 위치 리스너, 약 5초·5m마다)
+     * 다시 보내서 워치 미니맵의 현재 위치 점이 따라 움직이게 한다. 경로를 한 번 찍어 보내는 것이 아니라
+     * 실시간 위치가 핵심이다(보호자용 귀가 화면이 고정된 경로가 아니라 실시간 위치를 따라가는 것과 같은 이유).
      */
     fun sendRouteFound(
         context: Context,
@@ -155,7 +159,8 @@ object WearMessenger {
     ) {
         // 워치 미니맵 배경 지도 이미지: 사용자 위치(없으면 경로 시작점) 기준으로, 이미지 중심에서 충분히
         // 멀어졌을 때만 새로 받아서 보낸다(WearMapImageSender가 걸러 주므로 매번 불러도 된다).
-        val mapCenter = currentPoint ?: routeLineGeoJson?.let { parseGeoJsonPoints(it).firstOrNull() }
+        val mapCenter =
+            currentPoint ?: routeLineGeoJson?.let { parseGeoJsonPoints(it).firstOrNull() }
         mapCenter?.let { WearMapImageSender.sendIfNeeded(context, it) }
         send(
             context,
@@ -245,7 +250,9 @@ object WearMessenger {
     }
 
     private fun encodePoints(points: List<GeoPoint>): String =
-        points.joinToString(";") { String.format(Locale.US, "%.6f,%.6f", it.latitude, it.longitude) }
+        points.joinToString(";") {
+            String.format(Locale.US, "%.6f,%.6f", it.latitude, it.longitude)
+        }
 
     internal fun parseGeoJsonPoints(geoJson: String): List<GeoPoint> =
         try {
@@ -255,7 +262,9 @@ object WearMessenger {
                     val coordinate = coordinates.optJSONArray(index) ?: continue
                     val longitude = coordinate.optDouble(0, Double.NaN)
                     val latitude = coordinate.optDouble(1, Double.NaN)
-                    if (latitude.isFinite() && longitude.isFinite()) add(GeoPoint(latitude, longitude))
+                    if (latitude.isFinite() && longitude.isFinite()) {
+                        add(GeoPoint(latitude, longitude))
+                    }
                 }
             }
         } catch (e: Exception) {

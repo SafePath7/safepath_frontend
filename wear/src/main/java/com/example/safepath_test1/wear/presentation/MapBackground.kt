@@ -79,5 +79,10 @@ internal fun MapImage.toBackground(): MapBackground =
     MapBackground(
         image = bitmap.asImageBitmap(),
         projection =
-            MapProjection(centerLat = centerLat, centerLng = centerLng, zoom = zoom, imagePx = imagePx),
+            MapProjection(
+                centerLat = centerLat,
+                centerLng = centerLng,
+                zoom = zoom,
+                imagePx = imagePx,
+            ),
     )

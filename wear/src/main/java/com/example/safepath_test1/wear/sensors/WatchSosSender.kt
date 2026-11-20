@@ -9,12 +9,11 @@ import com.google.android.gms.wearable.Wearable
 private const val TAG = "WatchSosSender"
 
 /**
- * Sends an SOS trigger from the watch to the paired phone over the Wearable Data Layer, using the
- * same DataClient pattern as WatchVoiceSender/WearMessenger (MessageClient failed real-device
- * testing - see WearMessenger's doc comment on the phone side for why).
+ * 워치의 SOS를 Wearable Data Layer로 짝지어진 폰에 보낸다. WatchVoiceSender, WearMessenger와 같은
+ * DataClient 방식이다(MessageClient는 실기기 테스트에서 실패했다. 이유는 폰 쪽 WearMessenger 주석 참고).
  *
- * `triggeredAt` makes every press its own distinct DataItem so DataClient's identical-payload
- * dedup never swallows a second press sent in quick succession.
+ * `triggeredAt`이 누를 때마다 달라서, 짧은 간격으로 두 번 눌러도 DataClient가 같은 내용으로 보고
+ * 두 번째를 버리지 않는다.
  *
  * "SOS sent to phone" 로그는 워치의 Data Layer에 넣었다는 뜻이지 폰에 도착했다는 뜻이 아니다.
  * 도착은 폰의 답장(SOS_ACK)으로 안다. [triggeredAt]은 위험상황 화면의 요청 시각과 같은 값을 넘겨야
@@ -42,7 +41,8 @@ object WatchSosSender {
         Wearable.getNodeClient(context)
             .connectedNodes
             .addOnSuccessListener { nodes ->
-                Log.i(TAG, "Connected phone check: ${nodes.size} node(s) ${nodes.map { it.displayName }}")
+                val names = nodes.map { it.displayName }
+                Log.i(TAG, "Connected phone check: ${nodes.size} node(s) $names")
                 onResult(nodes.isNotEmpty())
             }
             .addOnFailureListener { e ->

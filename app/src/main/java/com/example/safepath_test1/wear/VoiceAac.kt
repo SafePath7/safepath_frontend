@@ -10,7 +10,10 @@ private const val TAG = "VoiceAacDecoder"
 
 /** ADTS 머리말의 표본 주파수 번호 → Hz (MPEG-4 표준 표). */
 private val ADTS_SAMPLE_RATES =
-    intArrayOf(96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000, 11_025, 8_000, 7_350)
+    intArrayOf(
+        96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000,
+        22_050, 16_000, 12_000, 11_025, 8_000, 7_350,
+    )
 
 /** ADTS로 감싼 AAC 프레임 하나. [payload]는 머리말을 뗀 순수 AAC 데이터다. */
 internal class AdtsFrame(
@@ -69,8 +72,10 @@ internal fun downmixToMono(stereo: ByteArray): ByteArray {
     var i = 0
     var o = 0
     while (i + 3 < stereo.size) {
-        val left = ((stereo[i + 1].toInt() shl 8) or (stereo[i].toInt() and 0xFF)).toShort().toInt()
-        val right = ((stereo[i + 3].toInt() shl 8) or (stereo[i + 2].toInt() and 0xFF)).toShort().toInt()
+        val left =
+            ((stereo[i + 1].toInt() shl 8) or (stereo[i].toInt() and 0xFF)).toShort().toInt()
+        val right =
+            ((stereo[i + 3].toInt() shl 8) or (stereo[i + 2].toInt() and 0xFF)).toShort().toInt()
         val mixed = (left + right) / 2
         mono[o] = mixed.toByte()
         mono[o + 1] = (mixed shr 8).toByte()
@@ -101,7 +106,9 @@ internal class VoiceAacDecoder {
             while (true) {
                 val index = decoder.dequeueInputBuffer(10_000)
                 if (index >= 0) {
-                    val buffer = decoder.getInputBuffer(index) ?: error("AAC decoder returned no input buffer")
+                    val buffer =
+                        decoder.getInputBuffer(index)
+                            ?: error("AAC decoder returned no input buffer")
                     buffer.clear()
                     buffer.put(frame.payload)
                     val presentationUs = framesFed * 1_024L * 1_000_000L / frame.sampleRateHz
@@ -124,7 +131,11 @@ internal class VoiceAacDecoder {
         codec?.let { if (key == configKey) return it }
         release()
         val format =
-            MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, first.sampleRateHz, first.channels).apply {
+            MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC,
+                first.sampleRateHz,
+                first.channels,
+            ).apply {
                 setByteBuffer("csd-0", ByteBuffer.wrap(first.audioSpecificConfig()))
             }
         val created = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)

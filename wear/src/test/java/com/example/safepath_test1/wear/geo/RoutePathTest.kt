@@ -18,7 +18,8 @@ class RoutePathTest {
     @Test
     fun progressAt_matchesTheOneShotFunction() {
         val path = RoutePath(points)
-        val positions = listOf(null, 37.000 to 127.0, 37.0005 to 127.0, 37.001 to 127.00005, 37.002 to 127.0)
+        val positions =
+            listOf(null, 37.000 to 127.0, 37.0005 to 127.0, 37.001 to 127.00005, 37.002 to 127.0)
         for (position in positions) {
             val cached = path.progressAt(position)
             val oneShot = computeRouteProgress(points, position)
@@ -38,7 +39,10 @@ class RoutePathTest {
     fun tooFewPoints_isEmptyProgress() {
         assertEquals(0.0, RoutePath(emptyList()).totalMeters, 0.0)
         assertEquals(0.0, RoutePath(listOf(37.0 to 127.0)).totalMeters, 0.0)
-        assertEquals(RouteProgress(0f, 0.0, 0, 0.0), RoutePath(listOf(37.0 to 127.0)).progressAt(37.0 to 127.0))
+        assertEquals(
+            RouteProgress(0f, 0.0, 0, 0.0),
+            RoutePath(listOf(37.0 to 127.0)).progressAt(37.0 to 127.0),
+        )
     }
 
     @Test

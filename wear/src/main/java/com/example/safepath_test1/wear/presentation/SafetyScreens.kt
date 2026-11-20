@@ -57,7 +57,11 @@ private fun ShieldIcon(modifier: Modifier = Modifier) {
                 lineTo(0f, h * 0.18f)
                 close()
             }
-        drawPath(shield, WatchColors.Success, style = Stroke(width = strokeWidth, join = StrokeJoin.Round))
+        drawPath(
+            shield,
+            WatchColors.Success,
+            style = Stroke(width = strokeWidth, join = StrokeJoin.Round),
+        )
         val check =
             Path().apply {
                 moveTo(w * 0.3f, h * 0.52f)
@@ -183,7 +187,12 @@ internal fun MovingStatusPage(onShieldLongPress: () -> Unit) {
  * 감지 내용은 AI 서버 연동 전이라 일반 문구로 둔다.
  */
 @Composable
-internal fun CheckInScreen(remainingMs: Long, totalMs: Long, onOkay: () -> Unit, onHelp: () -> Unit) {
+internal fun CheckInScreen(
+    remainingMs: Long,
+    totalMs: Long,
+    onOkay: () -> Unit,
+    onHelp: () -> Unit,
+) {
     val s = rememberWatchScale()
     val seconds = ((remainingMs + 999) / 1000).coerceAtLeast(0)
     WatchScreenScaffold(
@@ -249,10 +258,16 @@ internal fun CheckInScreen(remainingMs: Long, totalMs: Long, onOkay: () -> Unit,
  * "휴대폰에서 해제" 버튼을 길게 누르면 [onTestRelease]로 해제를 흉내 낼 수 있다(테스트용, 폰 연동 후 제거).
  */
 @Composable
-internal fun GuardianAlertedScreen(requestedAt: Long, delivery: SosDelivery, onTestRelease: () -> Unit) {
+internal fun GuardianAlertedScreen(
+    requestedAt: Long,
+    delivery: SosDelivery,
+    onTestRelease: () -> Unit,
+) {
     val s = rememberWatchScale()
     val time =
-        remember(requestedAt) { SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(requestedAt)) }
+        remember(requestedAt) {
+            SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(requestedAt))
+        }
     val (title, detail) =
         when (delivery) {
             SosDelivery.Sending -> "보호자에게 알리는 중" to "휴대폰으로 보내고 있어요"
@@ -260,14 +275,23 @@ internal fun GuardianAlertedScreen(requestedAt: Long, delivery: SosDelivery, onT
             SosDelivery.NotConnected -> "아직 전달되지 않았어요" to "휴대폰과 연결되면 자동으로 보내요"
         }
     val buttonShape = RoundedCornerShape(50)
-    WatchScreenScaffold(ringProgress = 1f, ringColor = Color.White, background = WatchColors.DangerBg) {
+    WatchScreenScaffold(
+        ringProgress = 1f,
+        ringColor = Color.White,
+        background = WatchColors.DangerBg,
+    ) {
         Column(
-            modifier = Modifier.align(Alignment.TopCenter).offset(y = s.dp(56)).widthIn(max = s.dp(330)),
+            modifier =
+                Modifier.align(Alignment.TopCenter)
+                    .offset(y = s.dp(56))
+                    .widthIn(max = s.dp(330)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
                 modifier =
-                    Modifier.size(s.dp(64)).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
+                    Modifier.size(s.dp(64))
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
                 WarningIcon(Color.White, Modifier.size(s.dp(34)))

@@ -7,14 +7,13 @@ import com.example.safepath_test1.wear.comm.MotionKeys
 private const val TAG = "WatchMotionSender"
 
 /**
- * Synchronizes the latest WatchSensorManager reading to the phone over the Wearable Data Layer's
- * DataClient, mirroring the phone->watch pattern already used by WearMessenger (app module,
- * com.example.safepath_test1.wear.WearMessenger): DataClient + matching applicationId is the
- * combination confirmed working real-device + real-device for this project, so MessageClient is not
- * used. StateFlow and a single DataItem may coalesce updates; this is not a lossless sensor stream.
+ * WatchSensorManager의 최신 측정값을 Wearable Data Layer의 DataClient로 폰에 보낸다.
+ * 폰 → 워치 방향의 WearMessenger(app 모듈)와 같은 방식이다. 이 프로젝트에서는 DataClient + 같은 applicationId
+ * 조합만 실기기 두 대에서 동작이 확인돼 MessageClient는 쓰지 않는다.
+ * StateFlow와 DataItem 하나가 갱신을 합칠 수 있어서, 빠짐없는 센서 스트림은 아니다.
  *
- * Does not log on success - at 20Hz that would double the log volume WatchSensorManager already
- * produces. Failures are still logged.
+ * 성공 로그는 남기지 않는다. 20Hz로 남기면 WatchSensorManager가 이미 남기는 로그 양이 두 배가 된다.
+ * 실패는 로그로 남긴다.
  */
 object WatchMotionSender {
 

@@ -7,7 +7,7 @@ import org.junit.Test
 
 class AlertFlowTest {
     @Test
-    fun startsInTheNormalStage() {
+    fun newState_startsInTheNormalStage() {
         assertEquals(AlertStage.None, AlertState().stage)
     }
 
@@ -54,7 +54,10 @@ class AlertFlowTest {
     fun releaseSignalWithinTheClockSkew_stillCloses_butOlderOnesDoNot() {
         val alerted = AlertState().requestHelp(now = 100_000L)
         assertEquals(AlertStage.None, alerted.releasedBy(100_000L - RELEASE_CLOCK_SKEW_MS).stage)
-        assertEquals(AlertStage.Alerted, alerted.releasedBy(100_000L - RELEASE_CLOCK_SKEW_MS - 1).stage)
+        assertEquals(
+            AlertStage.Alerted,
+            alerted.releasedBy(100_000L - RELEASE_CLOCK_SKEW_MS - 1).stage,
+        )
     }
 
     @Test
@@ -95,7 +98,10 @@ class AlertFlowTest {
     @Test
     fun notConnected_appliesOnlyToTheCurrentRequestStillSending() {
         val alerted = AlertState().requestHelp(now = 100_000L)
-        assertEquals(SosDelivery.NotConnected, alerted.markNotConnected(requestedAt = 100_000L).delivery)
+        assertEquals(
+            SosDelivery.NotConnected,
+            alerted.markNotConnected(requestedAt = 100_000L).delivery,
+        )
         // 다른 요청의 연결 확인 결과는 무시한다.
         assertEquals(SosDelivery.Sending, alerted.markNotConnected(requestedAt = 90_000L).delivery)
         // 답장이 먼저 왔으면 전달됨을 덮지 않는다.
@@ -112,8 +118,10 @@ class AlertFlowTest {
     @Test
     fun ackOverdue_marksNotConnectedOnlyAfterTheTimeout() {
         val alerted = AlertState().requestHelp(now = 100_000L)
-        assertEquals(SosDelivery.Sending, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS - 1).delivery)
-        assertEquals(SosDelivery.NotConnected, alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS).delivery)
+        val beforeTimeout = alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS - 1)
+        val atTimeout = alerted.ackOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS)
+        assertEquals(SosDelivery.Sending, beforeTimeout.delivery)
+        assertEquals(SosDelivery.NotConnected, atTimeout.delivery)
     }
 
     @Test

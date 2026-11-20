@@ -22,13 +22,10 @@ private const val CHANNEL_ID = "safepath_sos"
 private const val NOTIFICATION_ID = 2001
 
 /**
- * Receives the watch's SOS button press (WatchSosSender, wear module) over the Wearable Data
- * Layer and posts a notification on the phone.
+ * 워치의 SOS(wear 모듈의 WatchSosSender)를 Wearable Data Layer로 받아 폰에 알림을 띄운다.
  *
- * This only reaches the paired phone, not an actual guardian - there's no backend risk-event API
- * yet to relay it further (see the milestone doc's risk notes), so for now "SOS sent" means "this
- * phone got notified". Notification pattern mirrors WatchLaunchListenerService's tap-to-open
- * fallback notification on the watch side.
+ * 지금은 짝지어진 폰까지만 전달되고 보호자에게는 가지 않는다(워치 SOS를 서버로 보내는 연결은 아직 없다).
+ * 알림 방식은 워치 쪽 WatchLaunchListenerService의 "눌러서 열기" 대체 알림과 같다.
  *
  * 받은 뒤에는 워치에 답장(SOS_ACK)을 보내서, 워치가 "휴대폰에 전달됨"을 보여 줄 수 있게 한다.
  */
@@ -51,10 +48,9 @@ class WearSosRelayService : WearableListenerService() {
     }
 
     private fun showSosNotification(requestedAt: Long) {
-        // Defensive, same reasoning as WatchLaunchListenerService.showFallbackNotification(): this
-        // runs inside onDataChanged() with no caller to catch a thrown SecurityException (API 33+
-        // if POST_NOTIFICATIONS was revoked after install), and an uncaught exception here would
-        // crash the whole service.
+        // WatchLaunchListenerService.showFallbackNotification()과 같은 이유의 방어 코드다. onDataChanged() 안에서
+        // 불려서 SecurityException(API 33+에서 설치 뒤 POST_NOTIFICATIONS 권한을 끈 경우)을 잡아 줄 호출자가 없고,
+        // 여기서 예외가 새면 서비스 전체가 죽는다.
         try {
             val manager = getSystemService(NotificationManager::class.java) ?: return
 
@@ -100,6 +96,6 @@ class WearSosRelayService : WearableListenerService() {
 }
 
 /** 해제했을 때 폰에 남은 "SOS 수신" 알림을 지운다. */
-fun cancelSosNotification(context: Context) {
+internal fun cancelSosNotification(context: Context) {
     context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
 }
