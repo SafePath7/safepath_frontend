@@ -11,9 +11,9 @@ import com.google.android.gms.wearable.WearableListenerService
 private const val TAG = "WearDataRelayService"
 
 /**
- * 워치에서 Wearable Data Layer로 전달한 가속도계·자이로스코프 측정값을 수신한다.
- * 현재는 수신 값을 로그에 기록하며, AI 서버의 analyzeMotion 요청·응답 형식이 정해지면
- * 이곳에서 서버를 호출한다.
+ * 워치가 Wearable Data Layer로 보낸 가속도·자이로 1초 묶음(20Hz, 보통 샘플 20개)을 받는다.
+ * 받은 샘플은 최근 움직임 버퍼([recentMotion])에 쌓고, AI 분석 요청 때 음성 3초 창과 같은 구간을 꺼내
+ * motion 필드로 보낸다. 받을 때마다 로그 한 줄을 남긴다(초당 한 번).
  */
 class WearDataRelayService : WearableListenerService() {
 
@@ -23,18 +23,27 @@ class WearDataRelayService : WearableListenerService() {
             if (event.dataItem.uri.path != DataLayerPaths.MOTION) continue
 
             val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
-            val accelX = dataMap.getFloat(MotionKeys.ACCEL_X)
-            val accelY = dataMap.getFloat(MotionKeys.ACCEL_Y)
-            val accelZ = dataMap.getFloat(MotionKeys.ACCEL_Z)
-            val gyroX = dataMap.getFloat(MotionKeys.GYRO_X)
-            val gyroY = dataMap.getFloat(MotionKeys.GYRO_Y)
-            val gyroZ = dataMap.getFloat(MotionKeys.GYRO_Z)
-            val timestamp = dataMap.getLong(MotionKeys.TIMESTAMP)
-
+            val samples =
+                motionSamplesOf(
+                    dataMap.getLongArray(MotionKeys.TIMESTAMPS),
+                    dataMap.getFloatArray(MotionKeys.ACCEL_X),
+                    dataMap.getFloatArray(MotionKeys.ACCEL_Y),
+                    dataMap.getFloatArray(MotionKeys.ACCEL_Z),
+                    dataMap.getFloatArray(MotionKeys.GYRO_X),
+                    dataMap.getFloatArray(MotionKeys.GYRO_Y),
+                    dataMap.getFloatArray(MotionKeys.GYRO_Z),
+                )
+            if (samples.isEmpty()) {
+                Log.w(TAG, "Ignored an empty or broken motion batch")
+                continue
+            }
+            recentMotion.add(samples)
+            val rateHz = dataMap.getInt(MotionKeys.RATE_HZ)
+            val spanMs = samples.last().tMs - samples.first().tMs
             Log.d(
                 TAG,
-                "accel=(%.2f, %.2f, %.2f) gyro=(%.2f, %.2f, %.2f) timestamp=$timestamp"
-                    .format(accelX, accelY, accelZ, gyroX, gyroY, gyroZ),
+                "Motion batch: ${samples.size} samples @${rateHz}Hz, span=${spanMs}ms, " +
+                    "buffered=${recentMotion.size()}",
             )
         }
     }
