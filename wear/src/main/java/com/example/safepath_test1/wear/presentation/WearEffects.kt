@@ -64,7 +64,10 @@ internal fun VoiceCaptureEffect(context: Context, active: Boolean) {
     }
 }
 
-/** 폰이 보내는 값(상태, 지도 이미지, 해제 신호, SOS 답장)을 받아 [state]에 반영한다. 받는 방법과 순서 규칙은 WatchDataReceiver에 있다. */
+/**
+ * 폰이 보내는 값(상태, 지도 이미지, 해제 신호, SOS 답장, 위험 확인 질문)을 받아 [state]에 반영한다.
+ * 받는 방법과 순서 규칙은 WatchDataReceiver에 있다.
+ */
 @Composable
 internal fun DataLayerEffect(context: Context, state: WearAppState) {
     val scope = rememberCoroutineScope()
@@ -80,6 +83,14 @@ internal fun DataLayerEffect(context: Context, state: WearAppState) {
                 onMapImage = state::onMapImage,
                 onRelease = state::onRelease,
                 onSosAck = state::onSosAck,
+                onRiskCheck = { check ->
+                    val shown = state.onRiskCheck(check)
+                    Log.i(
+                        TAG,
+                        "Risk check eventId=${check.eventId} riskType=${check.riskType} " +
+                            "requestedAt=${check.requestedAt} shown=$shown",
+                    )
+                },
             )
         receiver.start()
         onDispose { receiver.stop() }
@@ -99,12 +110,12 @@ internal fun StaleStatusEffect(state: WearAppState) {
 
 /**
  * 위험 감지 흐름의 시간에 따른 동작.
- * 폰의 해제 신호가 오면 위험상황 화면을 닫고, 확인 질문은 남은 시간을 줄이다가 0이 되면 [requestHelp]를 부른다.
+ * 폰의 해제 신호가 오면 위험상황 화면을 닫고, 확인 질문은 남은 시간을 줄이다가 0이 되면 [onCheckInTimeout]을 부른다.
  * 위험상황이 되면 [SOS_ACK_TIMEOUT_MS] 뒤에 폰의 답장이 왔는지 확인해서, 없으면 아직 전달되지 않았다고 보여 준다.
  */
 @Composable
-internal fun AlertEffects(state: WearAppState, requestHelp: () -> Unit) {
-    val currentRequestHelp by rememberUpdatedState(requestHelp)
+internal fun AlertEffects(state: WearAppState, onCheckInTimeout: () -> Unit) {
+    val currentOnCheckInTimeout by rememberUpdatedState(onCheckInTimeout)
 
     // 폰에서 해제 신호가 오면 위험상황 화면을 닫고 평소 화면(길안내)으로 돌아간다.
     LaunchedEffect(state.releaseSignalAt) { state.releaseIfSignalled() }
@@ -121,7 +132,7 @@ internal fun AlertEffects(state: WearAppState, requestHelp: () -> Unit) {
         while (true) {
             val remaining = state.alert.checkInRemainingMs(System.currentTimeMillis())
             if (remaining <= 0) {
-                currentRequestHelp()
+                currentOnCheckInTimeout()
                 break
             }
             state.showCheckInRemaining(remaining)

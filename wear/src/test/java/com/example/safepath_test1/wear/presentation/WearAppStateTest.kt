@@ -1,5 +1,6 @@
 package com.example.safepath_test1.wear.presentation
 
+import com.example.safepath_test1.wear.comm.RiskCheck
 import com.example.safepath_test1.wear.comm.StatusUpdate
 import com.example.safepath_test1.wear.state.AlertStage
 import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
@@ -114,5 +115,16 @@ class WearAppStateTest {
         state.requestHelp(now = 100_000L)
         state.checkSosAckOverdue(now = 100_000L + SOS_ACK_TIMEOUT_MS)
         assertEquals(SosDelivery.NotConnected, state.alert.delivery)
+    }
+
+    @Test
+    fun riskCheck_showsCheckInWithFullTime_andIsIgnoredWhenAlreadyShown() {
+        val state = WearAppState()
+        state.showCheckInRemaining(3_000L)
+        val check = RiskCheck(eventId = "ev-1", riskType = "FALL", requestedAt = 100_000L)
+        assertTrue(state.onRiskCheck(check, now = 101_000L))
+        assertEquals(AlertStage.CheckIn, state.alert.stage)
+        assertEquals(CHECK_IN_COUNTDOWN_MS, state.checkInRemainingMs)
+        assertFalse(state.onRiskCheck(check, now = 102_000L))
     }
 }
