@@ -23,7 +23,7 @@ private const val TAG = "WearEffects"
 // WearApp이 켜 두는 부작용(센서, 마이크, 통신, 타이머)을 화면 코드와 떼어 놓은 효과 함수들.
 // 화면이 사라지면 각 효과가 스스로 정리된다.
 
-/** 가속도·자이로를 모아 폰의 WearDataRelayService로 전달한다. AI 서버 연동은 아직 구현되지 않았다. */
+/** 가속도·자이로를 20Hz로 모아 1초 묶음으로 폰의 WearDataRelayService에 전달한다(초당 한 번 전송). */
 @Composable
 internal fun SensorEffect(context: Context) {
     val sensorManager = remember { WatchSensorManager(context) }
@@ -33,9 +33,7 @@ internal fun SensorEffect(context: Context) {
         onDispose { sensorManager.stopCollection() }
     }
     LaunchedEffect(sensorManager) {
-        sensorManager.motionData.collect { motion ->
-            motion?.let { WatchMotionSender.send(context, it) }
-        }
+        sensorManager.motionBatches.collect { batch -> WatchMotionSender.send(context, batch) }
     }
 }
 

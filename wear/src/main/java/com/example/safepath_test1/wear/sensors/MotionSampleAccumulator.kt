@@ -1,7 +1,7 @@
 package com.example.safepath_test1.wear.sensors
 
 /** 두 센서의 최신 측정값. timestamp는 폰에서 쓰는 실제 시각(밀리초)이다. */
-data class MotionData(
+internal data class MotionData(
     val accelX: Float,
     val accelY: Float,
     val accelZ: Float,
@@ -11,7 +11,7 @@ data class MotionData(
     val timestamp: Long,
 )
 
-/** 센서 이벤트의 단조 증가 시각으로 합친 값의 갱신을 20Hz로 제한한다. */
+/** 센서 이벤트의 단조 증가 시각으로 합친 값의 갱신을 [MOTION_RATE_HZ](20Hz)로 제한한다. */
 internal class MotionSampleAccumulator {
     private var acceleration: Triple<Float, Float, Float>? = null
     private var rotation: Triple<Float, Float, Float>? = null
@@ -39,7 +39,7 @@ internal class MotionSampleAccumulator {
         val accel = acceleration ?: return null
         val gyro = rotation ?: return null
         val previous = lastEmissionNanos
-        if (previous != null && nanos - previous < 50_000_000L) return null
+        if (previous != null && nanos - previous < 1_000_000_000L / MOTION_RATE_HZ) return null
         lastEmissionNanos = nanos
         return MotionData(
             accel.first,
