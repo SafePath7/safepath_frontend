@@ -5,6 +5,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.http.*
+import retrofit2.HttpException
 
 data class GuardianRegistration(val id: Long, val userId: Long, val userName: String, val guardianId: Long, val guardianName: String, val status: String, val canViewLocation: Boolean, val canViewStatus: Boolean, val canViewPersonalInfo: Boolean)
 data class GuardianRequest(val guardianId: Long)
@@ -12,6 +13,16 @@ data class GuardianPermissions(val canViewLocation: Boolean, val canViewStatus: 
 data class SosResult(val successCount: Int, val failureCount: Int)
 data class FcmTokenBody(val fcmToken: String)
 data class BackendSession(val id: String, val startedAt: String)
+data class MonitoringChannel(val channelId: String)
+data class RouteCoordinate(val latitude: Double, val longitude: Double)
+data class SelectedRouteBody(val type: String, val coordinates: List<RouteCoordinate>, val distanceMeters: Double, val durationSeconds: Double, val safetyScore: Double?, val destinationName: String?)
+data class StartSessionBody(val guardianIds: List<Long>, val selectedRoute: SelectedRouteBody?)
+internal fun serverRouteType(value: String): String = when (value) {
+    "Safe" -> "SAFEST"
+    "Shortest" -> "FASTEST"
+    "Recommended" -> "RECOMMENDED"
+    else -> throw IllegalArgumentException("경로 유형을 확인해 주세요.")
+}
 data class RiskEventDetail(val id: Long, val userId: Long, val sessionId: String, val eventType: String, val description: String, val status: String, val detectedAt: String)
 data class GuardianPermissionResult(val allowed: Boolean)
 data class RiskEventRequest(val sessionId: String, val eventType: String, val description: String, val detectedAt: String)
@@ -27,9 +38,12 @@ interface BackendApi {
     @GET("api/guardian-registrations/{id}/permissions/check") suspend fun checkPermission(@Header("Authorization") auth: String, @Path("id") id: Long, @Query("permissionType") permissionType: String): GuardianPermissionResult
     @PUT("api/notifications/fcm-token") suspend fun registerToken(@Header("Authorization") auth: String, @Body body: FcmTokenBody)
     @POST("api/notifications/sos") suspend fun sos(@Header("Authorization") auth: String): SosResult
-    @POST("api/safe-return/sessions") suspend fun startSession(@Header("Authorization") auth: String): BackendSession
+    @POST("api/safe-return/sessions") suspend fun startSession(@Header("Authorization") auth: String, @Body body: StartSessionBody): BackendSession
     @GET("api/safe-return/sessions/{id}/status") suspend fun sessionStatus(@Header("Authorization") auth: String, @Path("id") id: String): BackendSession
     @PATCH("api/safe-return/sessions/{id}/end") suspend fun endSession(@Header("Authorization") auth: String, @Path("id") id: String)
+    @GET("api/guardian/monitoring/sessions/users/{userId}/active") suspend fun activeSession(@Header("Authorization") auth: String, @Path("userId") userId: Long): retrofit2.Response<BackendSession>
+    @GET("api/guardian/monitoring/sessions/{id}/channel") suspend fun monitoringChannel(@Header("Authorization") auth: String, @Path("id") id: String): MonitoringChannel
+    @GET("api/guardian/monitoring/sessions/{id}/route") suspend fun monitoringRoute(@Header("Authorization") auth: String, @Path("id") id: String): retrofit2.Response<SelectedRouteBody>
     @GET("api/risk-events") suspend fun riskEvents(@Header("Authorization") auth: String, @Query("userId") userId: Long? = null): List<RiskEventDetail>
     @GET("api/risk-events/{id}") suspend fun riskEvent(@Header("Authorization") auth: String, @Path("id") id: Long): RiskEventDetail
     @POST("api/risk-events") suspend fun createRiskEvent(@Header("Authorization") auth: String, @Body body: RiskEventRequest): RiskEventResult
@@ -51,9 +65,20 @@ class BackendRepository(context: Context) {
     suspend fun checkPermission(id: Long, type: String) = backend.request { api.checkPermission(it, id, type) }
     suspend fun registerToken(token: String) = backend.request { api.registerToken(it, FcmTokenBody(token)) }
     suspend fun sos() = backend.request { api.sos(it) }
-    suspend fun startSession() = backend.request { api.startSession(it) }
+    suspend fun startSession(guardianIds: List<Long>, route: SelectedRouteBody?) = backend.request { api.startSession(it, StartSessionBody(guardianIds, route)) }
     suspend fun sessionStatus(id: String) = backend.request { api.sessionStatus(it, id) }
     suspend fun endSession(id: String) = backend.request { api.endSession(it, id) }
+    suspend fun activeSession(userId: Long): BackendSession? = backend.request {
+        val response = api.activeSession(it, userId)
+        if (!response.isSuccessful) throw HttpException(response)
+        response.body()
+    }
+    suspend fun monitoringChannel(id: String) = backend.request { api.monitoringChannel(it, id) }
+    suspend fun monitoringRoute(id: String): SelectedRouteBody? = backend.request {
+        val response = api.monitoringRoute(it, id)
+        if (!response.isSuccessful) throw HttpException(response)
+        response.body()
+    }
     suspend fun riskEvents(userId: Long? = null) = backend.request { api.riskEvents(it, userId) }
     suspend fun riskEvent(id: Long) = backend.request { api.riskEvent(it, id) }
     suspend fun createRiskEvent(value: RiskEventRequest) = backend.request { api.createRiskEvent(it, value) }

@@ -117,7 +117,7 @@ fun HomeScreen(
     hasLocationPermission: Boolean,
     testJourneyActive: Boolean,
     testJourneyPending: Boolean,
-    onTestJourneyStart: (String?, String, String, List<String>, Double?, Double?, Double?, Double?, String) -> Unit,
+    onTestJourneyStart: (com.example.safepath_test1.location.RouteResult?, String, String, List<String>, Double?, Double?, Double?, Double?, String) -> Unit,
     onTestJourneyEnd: () -> Unit,
     origin: PlaceSelection,
     destination: PlaceSelection,
@@ -164,6 +164,8 @@ fun HomeScreen(
     }
     var endPin by remember { mutableStateOf("") }
     var endPinError by remember { mutableStateOf(false) }
+    var endPinFailures by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(testJourneyActive) { if (!testJourneyActive) endPinFailures = 0 }
     var endAuthenticating by remember { mutableStateOf(false) }
     var endAuthenticationCancellation by remember { mutableStateOf<android.os.CancellationSignal?>(null) }
     val endAuthenticationScopeActive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
@@ -292,7 +294,7 @@ fun HomeScreen(
             testJourneyPending = testJourneyPending,
             onTestJourneyStart = { names, pin ->
                 com.example.safepath_test1.session.JourneyEndAuth.setEndPin(pin)
-                onTestJourneyStart(selectedTestRoute ?: activeRoute?.geoJsonLineString, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
+                onTestJourneyStart(activeRoute, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
             },
             onTestJourneyEnd = onTestJourneyEnd,
             modifier = modifier.padding(bottom = 88.dp),
@@ -753,6 +755,7 @@ fun HomeScreen(
             onDismissRequest = { showJourneyEnd = false },
             title = { Text("안전귀가 종료") },
             text = {
+                Column {
                 androidx.compose.material3.OutlinedTextField(
                     value = endPin,
                     onValueChange = { endPin = it.filter(Char::isDigit).take(4); endPinError = false },
@@ -761,9 +764,11 @@ fun HomeScreen(
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
                     isError = endPinError,
                 )
+                if (endPinError) Text(if (endPinFailures >= 5) "비밀번호가 5회 이상 일치하지 않았습니다. 다시 확인해 주세요." else "비밀번호가 일치하지 않습니다. ($endPinFailures/5)")
+                }
             },
             confirmButton = { androidx.compose.material3.TextButton(enabled = !testJourneyPending && endPin.length == 4, onClick = {
-                if (com.example.safepath_test1.session.JourneyEndAuth.verifyEndPin(endPin)) { showJourneyEnd = false; endPin = ""; onTestJourneyEnd() } else endPinError = true
+                if (com.example.safepath_test1.session.JourneyEndAuth.verifyEndPin(endPin)) { showJourneyEnd = false; endPin = ""; endPinFailures = 0; onTestJourneyEnd() } else { endPinFailures++; endPinError = true }
             }) { Text("종료") } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { showJourneyEnd = false }) { Text("취소") } },
         )

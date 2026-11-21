@@ -148,12 +148,27 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                     hasLocationPermission = hasLocationPermission,
                     testJourneyActive = testJourneyActive,
                     testJourneyPending = testJourneyPending,
-                    onTestJourneyStart = { _, _, _, _, _, _, _, _, _ ->
+                    onTestJourneyStart = { route, _, destinationName, selectedRegistrations, _, _, _, _, routeType ->
                         testJourneyPending = true
                         scope.launch {
                             try {
                                 val user = uid ?: error("로그인이 필요합니다.")
-                                val session = backendRepository.startSession()
+                                val profile = AccountRepository(context).profile()
+                                val registrations = backendRepository.guardians()
+                                val selected = selectedRegistrations.map { id ->
+                                    registrations.singleOrNull { it.id.toString() == id && it.userId == profile.userId && it.status == "ACCEPTED" && it.canViewLocation }
+                                        ?: error("선택한 보호자의 연결 또는 위치 권한을 다시 확인해 주세요.")
+                                }
+                                check(selected.isNotEmpty()) { "위치 권한이 있는 보호자를 선택해 주세요." }
+                                val serverRoute = route?.let { value ->
+                                    val points = value.geometryPoints.map { com.example.safepath_test1.api.RouteCoordinate(it.latitude, it.longitude) }
+                                    check(points.size in 2..10000 && value.distanceMeters in 0.0..20000.0) { "서버에 전달할 경로 정보를 확인해 주세요." }
+                                    val serverType = com.example.safepath_test1.api.serverRouteType(routeType)
+                                    com.example.safepath_test1.api.SelectedRouteBody(serverType, points, value.distanceMeters,
+                                        com.example.safepath_test1.location.NavigationRepository.travelSeconds(value),
+                                        value.safetyFacilityScore.takeIf { it.isFinite() && it in 0.0..100.0 }, destinationName.take(200))
+                                }
+                                val session = backendRepository.startSession(selected.map { it.guardianId }, serverRoute)
                                 check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }
                                 if (!sessions.edit().putString(user, session.id).commit()) {
                                     runCatching { backendRepository.endSession(session.id) }
@@ -203,7 +218,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                         }
                     },
                 )
-            SafePathTab.Guardian -> GuardianScreen(modifier = Modifier.padding(bottom = 100.dp))
+            SafePathTab.Guardian -> com.example.safepath_test1.ui.guardian.ActiveGuardianScreen(modifier = Modifier.padding(bottom = 100.dp))
             SafePathTab.Profile ->
                 ProfileScreen(
                     hasLocationPermission = hasLocationPermission,
@@ -251,7 +266,12 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                             scope.launch {
                                 try {
                                     val result = backendRepository.sos()
-                                    android.widget.Toast.makeText(context, "SOS 알림 서버 발송 성공 ${result.successCount}건, 실패 ${result.failureCount}건", android.widget.Toast.LENGTH_LONG).show()
+                                    val message = when {
+                                        result.successCount == 0 && result.failureCount == 0 -> "알림을 받을 수 있는 보호자가 없습니다."
+                                        result.successCount == 0 -> "SOS 알림 발송에 실패했습니다. 다른 방법으로 도움을 요청해 주세요."
+                                        else -> "SOS 알림 서버 발송 성공 ${result.successCount}건, 실패 ${result.failureCount}건"
+                                    }
+                                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                                     showSosConfirmation = false
                                 } catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }

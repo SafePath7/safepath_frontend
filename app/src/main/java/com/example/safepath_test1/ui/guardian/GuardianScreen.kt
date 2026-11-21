@@ -791,7 +791,7 @@ fun DepartureScreen(
                     val client = com.example.safepath_test1.session.JourneyEndAuth
                     client.biometricKeyAlias?.let { runCatching { com.example.safepath_test1.session.BiometricSessionSigner.deleteKey(it) } }
                     client.biometricKeyAlias = null
-                    val names = guardians.filter { it.id in selected }.map { it.name }
+                    val names = selected.toList()
                     val activity = context as? android.app.Activity
                     if (useBiometric && activity != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                         val alias = runCatching { com.example.safepath_test1.session.BiometricSessionSigner.createKey(context).keyAlias }.getOrNull()
