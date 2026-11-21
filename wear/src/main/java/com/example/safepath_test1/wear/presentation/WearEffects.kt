@@ -1,6 +1,9 @@
 package com.example.safepath_test1.wear.presentation
 
 import android.content.Context
+import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,10 +18,14 @@ import com.example.safepath_test1.wear.sensors.WatchSensorManager
 import com.example.safepath_test1.wear.sensors.WatchVoiceRecorder
 import com.example.safepath_test1.wear.sensors.WatchVoiceSender
 import com.example.safepath_test1.wear.state.AlertStage
+import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
 import com.example.safepath_test1.wear.state.SOS_ACK_TIMEOUT_MS
 import kotlinx.coroutines.delay
 
 private const val TAG = "WearEffects"
+
+/** 확인 질문이 뜰 때의 진동: 0.3초씩 세 번. 짝수 칸은 쉬는 시간, 홀수 칸은 울리는 시간(ms)이다. */
+private val CHECK_IN_VIBRATION_MS = longArrayOf(0, 300, 200, 300, 200, 300)
 
 // WearApp이 켜 두는 부작용(센서, 마이크, 통신, 타이머)을 화면 코드와 떼어 놓은 효과 함수들.
 // 화면이 사라지면 각 효과가 스스로 정리된다.
@@ -140,3 +147,55 @@ internal fun AlertEffects(state: WearAppState, onCheckInTimeout: () -> Unit) {
         }
     }
 }
+
+/**
+ * 확인 질문이 떠 있는 동안([active]) 진동을 한 번 주고 화면을 켜 둔다. 질문이 바뀌면([startedAt]) 다시 한다.
+ *
+ * 실기기 시험에서 화면이 어두운 채로 질문이 조용히 떴다가 30초 뒤 그대로 SOS로 넘어갔다.
+ * 실제 위험 상황에서 사용자가 질문을 놓치지 않게 손목에 알리고 화면을 밝힌다.
+ * 화면 켜기는 ACQUIRE_CAUSES_WAKEUP 웨이크락으로 한다. 꺼진 화면을 켜는 다른 방법(setTurnScreenOn)은
+ * 화면이 다시 앞으로 올 때만 적용돼서, 앱이 이미 앞에 있는데 화면만 꺼진 경우를 못 켠다.
+ * 웨이크락은 제한 시간을 걸어 잡고, 질문이 끝나면 바로 놓는다.
+ */
+@Composable
+internal fun CheckInAlertEffect(context: Context, active: Boolean, startedAt: Long) {
+    DisposableEffect(active, startedAt) {
+        if (!active) return@DisposableEffect onDispose {}
+
+        vibrateForCheckIn(context)
+        val wakeLock = acquireScreenWakeLock(context)
+        onDispose {
+            try {
+                if (wakeLock?.isHeld == true) wakeLock.release()
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "Failed to release check-in wake lock", e)
+            }
+        }
+    }
+}
+
+private fun vibrateForCheckIn(context: Context) {
+    try {
+        val vibrator = context.getSystemService(Vibrator::class.java) ?: return
+        if (!vibrator.hasVibrator()) return
+        vibrator.vibrate(VibrationEffect.createWaveform(CHECK_IN_VIBRATION_MS, -1))
+    } catch (e: RuntimeException) {
+        // 진동이 안 돼도 질문 화면은 그대로 떠야 한다.
+        Log.w(TAG, "Check-in vibration failed", e)
+    }
+}
+
+// SCREEN_BRIGHT_WAKE_LOCK은 deprecated지만 화면을 켜는 ACQUIRE_CAUSES_WAKEUP과 함께 쓸 수 있는 유일한 종류다.
+@Suppress("DEPRECATION")
+private fun acquireScreenWakeLock(context: Context): PowerManager.WakeLock? =
+    try {
+        context.getSystemService(PowerManager::class.java)
+            ?.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "SafePath:CheckIn",
+            )
+            ?.apply { acquire(CHECK_IN_COUNTDOWN_MS) }
+    } catch (e: RuntimeException) {
+        Log.w(TAG, "Failed to acquire check-in wake lock", e)
+        null
+    }

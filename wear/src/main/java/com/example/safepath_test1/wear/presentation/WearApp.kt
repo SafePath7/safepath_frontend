@@ -49,6 +49,12 @@ fun WearApp() {
     VoiceCaptureEffect(context, active = state.isNavigating)
     DataLayerEffect(context, state)
     StaleStatusEffect(state)
+    // 확인 질문이 뜨면 진동하고 화면을 켜 둔다(폰의 질문과 테스트 질문 모두).
+    CheckInAlertEffect(
+        context,
+        active = state.alert.stage == AlertStage.CheckIn,
+        startedAt = state.alert.checkInStartedAt,
+    )
     AlertEffects(
         state,
         onCheckInTimeout = {
