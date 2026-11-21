@@ -12,6 +12,14 @@ internal const val RELEASE_CLOCK_SKEW_MS = 5_000L
  */
 internal const val SOS_ACK_TIMEOUT_MS = 10_000L
 
+/**
+ * 폰의 위험 확인 질문(RISK_CHECK)을 띄워도 되는 최대 나이(ms).
+ * 질문 시각에서 확인 질문 제한 시간이 지났으면 이미 응답 없음으로 처리됐어야 할 질문이라 띄우지 않는다.
+ * 워치 연결이 끊겼다가 다시 이어지면 옛 질문이 늦게 오고, 앱을 켤 때도 Data Layer에 남은 마지막 질문이 다시 읽히기 때문이다.
+ * 폰·워치 시계 차이를 [RELEASE_CLOCK_SKEW_MS]만큼 봐준다.
+ */
+internal const val RISK_CHECK_MAX_AGE_MS = CHECK_IN_COUNTDOWN_MS + RELEASE_CLOCK_SKEW_MS
+
 /** 위험 감지 흐름: 평소(길안내) → 확인 질문(UI-W3) → 보호자 알림(UI-W4). */
 internal enum class AlertStage {
     None,
@@ -48,17 +56,57 @@ internal data class AlertState(
     val helpRequestedAt: Long = 0L,
     /** 이번 위험상황이 폰까지 전달됐는지. */
     val delivery: SosDelivery = SosDelivery.Sending,
+    /** 지금 확인 질문이 폰의 어느 위험 이벤트에 대한 것인지. 방패 길게 누르기(테스트)로 띄웠으면 null이다. */
+    val riskEventId: String? = null,
+    /** 마지막으로 띄운 위험 이벤트. 같은 질문이 두 번 와도(리스너와 기존 값 읽기) 다시 띄우지 않게 기억한다. */
+    val lastRiskEventId: String? = null,
 ) {
-    /** 확인 질문을 시작한다. 지금은 방패 길게 누르기(테스트용)로 호출되고, AI 서버가 붙으면 실제 위험 신호에서 호출한다. */
+    /** 확인 질문을 시작한다. 방패 길게 누르기(테스트용)로 호출된다. 폰의 질문은 [receiveRiskCheck]로 들어온다. */
     fun startCheckIn(now: Long): AlertState =
-        copy(stage = AlertStage.CheckIn, checkInStartedAt = now)
+        copy(stage = AlertStage.CheckIn, checkInStartedAt = now, riskEventId = null)
+
+    /**
+     * 폰의 위험 확인 질문(이벤트 [eventId], 질문 시각 [requestedAt])을 받아 확인 질문을 띄운다.
+     * 평소 상태가 아니거나(이미 질문 중이거나 위험상황), 이미 띄운 이벤트이거나, 오래된 질문이면 그대로 둔다.
+     * 남은 시간은 질문 시각이 아니라 워치에 띄운 [now]부터 센다. 앱을 여느라 늦어져도 사용자가 답할 시간을 다 주기 위해서다.
+     */
+    fun receiveRiskCheck(eventId: String, requestedAt: Long, now: Long): AlertState =
+        if (
+            stage == AlertStage.None &&
+                eventId.isNotBlank() &&
+                eventId != lastRiskEventId &&
+                isRiskCheckFresh(requestedAt, now)
+        ) {
+            copy(
+                stage = AlertStage.CheckIn,
+                checkInStartedAt = now,
+                riskEventId = eventId,
+                lastRiskEventId = eventId,
+            )
+        } else {
+            this
+        }
+
+    /**
+     * 지금 확인 질문에 [answer](RiskAnswers의 값)로 답할 때 폰에 보낼 응답. 폰의 질문으로 띄운 확인 질문일 때만 있고,
+     * 테스트로 띄웠거나 확인 질문 중이 아니면 null이다. 상태는 바꾸지 않는다. 호출하는 쪽이 보낸 뒤 [dismiss]나 [requestHelp]를 부른다.
+     */
+    fun riskAnswer(answer: String, now: Long): RiskAnswer? {
+        val eventId = riskEventId ?: return null
+        return if (stage == AlertStage.CheckIn) RiskAnswer(eventId, answer, now) else null
+    }
 
     /** "괜찮아요"나 해제로 평소 화면으로 돌아간다. */
-    fun dismiss(): AlertState = copy(stage = AlertStage.None)
+    fun dismiss(): AlertState = copy(stage = AlertStage.None, riskEventId = null)
 
     /** 도움 요청, SOS, 확인 질문 시간 초과 중 하나로 위험상황 단계에 들어간다. */
     fun requestHelp(now: Long): AlertState =
-        copy(stage = AlertStage.Alerted, helpRequestedAt = now, delivery = SosDelivery.Sending)
+        copy(
+            stage = AlertStage.Alerted,
+            helpRequestedAt = now,
+            delivery = SosDelivery.Sending,
+            riskEventId = null,
+        )
 
     /**
      * 요청 시각이 [requestedAt]인 SOS를 보낼 때 연결된 폰이 없었다. 지금 위험상황의 것이고 아직 답장이 오지 않았을 때만 바꾼다.
@@ -108,3 +156,17 @@ internal data class AlertState(
 /** 이 위험상황(요청 시각 [alertRequestedAt]) 이후에 온 해제 신호인지. 옛 위험상황의 낡은 신호는 무시한다. */
 internal fun shouldReleaseAlert(releaseSignalAt: Long, alertRequestedAt: Long): Boolean =
     releaseSignalAt > 0L && releaseSignalAt >= alertRequestedAt - RELEASE_CLOCK_SKEW_MS
+
+/**
+ * 질문 시각이 [requestedAt]인 위험 확인 질문을 지금([now]) 띄워도 되는지. 시각이 없거나 [RISK_CHECK_MAX_AGE_MS]보다 오래됐으면 띄우지 않는다.
+ * 폰 시계가 조금 빨라 질문 시각이 미래여도 띄운다.
+ */
+internal fun isRiskCheckFresh(requestedAt: Long, now: Long): Boolean =
+    requestedAt > 0L && now - requestedAt <= RISK_CHECK_MAX_AGE_MS
+
+/** 폰에 보낼 위험 확인 질문의 응답. [answer]는 RiskAnswers의 값이다. */
+internal data class RiskAnswer(
+    val eventId: String,
+    val answer: String,
+    val answeredAt: Long,
+)

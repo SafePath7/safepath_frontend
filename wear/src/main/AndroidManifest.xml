@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 확인 질문이 뜰 때 진동하고 화면을 켜는 데 쓴다(WearEffects의 CheckInAlertEffect). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.type.watch" />
 
@@ -35,6 +38,18 @@
           android:scheme="wear"
           android:host="*"
           android:pathPrefix="/safepath/launch_watch"
+        />
+            </intent-filter>
+        </service>
+
+        <!-- pathPrefix는 wear-contract의 DataLayerPaths.RISK_CHECK와 같아야 한다(XML에서는 상수를 못 쓴다). -->
+        <service android:name=".launch.WatchRiskCheckListenerService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+          android:scheme="wear"
+          android:host="*"
+          android:pathPrefix="/safepath/risk_check"
         />
             </intent-filter>
         </service>

@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.safepath_test1.wear.comm.MapImage
+import com.example.safepath_test1.wear.comm.RiskCheck
 import com.example.safepath_test1.wear.comm.StatusUpdate
 import com.example.safepath_test1.wear.state.AlertState
 import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
@@ -81,6 +82,15 @@ internal class WearAppState {
     fun startCheckIn(now: Long) {
         checkInRemainingMs = CHECK_IN_COUNTDOWN_MS
         alert = alert.startCheckIn(now)
+    }
+
+    /** 폰의 위험 확인 질문. 띄울 수 있는 질문이면 확인 질문을 시작하고 true를 돌려준다(띄우지 않는 경우는 AlertState 참고). */
+    fun onRiskCheck(check: RiskCheck, now: Long = System.currentTimeMillis()): Boolean {
+        val next = alert.receiveRiskCheck(check.eventId, check.requestedAt, now)
+        if (next == alert) return false
+        checkInRemainingMs = CHECK_IN_COUNTDOWN_MS
+        alert = next
+        return true
     }
 
     fun showCheckInRemaining(remainingMs: Long) {

@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.wear.compose.material.MaterialTheme
+import com.example.safepath_test1.wear.comm.RiskAnswers
+import com.example.safepath_test1.wear.sensors.WatchRiskAnswerSender
 import com.example.safepath_test1.wear.sensors.WatchSosSender
 import com.example.safepath_test1.wear.state.AlertStage
 import com.example.safepath_test1.wear.state.CHECK_IN_COUNTDOWN_MS
@@ -34,12 +36,32 @@ fun WearApp() {
         }
     }
 
+    // 폰의 위험 확인 질문으로 띄운 확인 질문이면 답을 폰에 보낸다. 테스트로 띄운 질문은 AlertState가 응답을 만들지 않는다.
+    // 상태를 바꾸기 전에 불러야 한다. 답한 뒤에는 질문의 이벤트 ID가 지워진다.
+    val answerRiskCheck: (String) -> Unit = { answer ->
+        state.alert.riskAnswer(answer, System.currentTimeMillis())?.let {
+            WatchRiskAnswerSender.send(context, it)
+        }
+    }
+
     SensorEffect(context)
     // 길안내 중에만 마이크로 녹음하고, 길안내가 끝나면 바로 멈춘다.
     VoiceCaptureEffect(context, active = state.isNavigating)
     DataLayerEffect(context, state)
     StaleStatusEffect(state)
-    AlertEffects(state, requestHelp)
+    // 확인 질문이 뜨면 진동하고 화면을 켜 둔다(폰의 질문과 테스트 질문 모두).
+    CheckInAlertEffect(
+        context,
+        active = state.alert.stage == AlertStage.CheckIn,
+        startedAt = state.alert.checkInStartedAt,
+    )
+    AlertEffects(
+        state,
+        onCheckInTimeout = {
+            answerRiskCheck(RiskAnswers.NO_RESPONSE)
+            requestHelp()
+        },
+    )
 
     MaterialTheme {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -48,8 +70,14 @@ fun WearApp() {
                     CheckInScreen(
                         remainingMs = state.checkInRemainingMs,
                         totalMs = CHECK_IN_COUNTDOWN_MS,
-                        onOkay = state::dismissAlert,
-                        onHelp = requestHelp,
+                        onOkay = {
+                            answerRiskCheck(RiskAnswers.SAFE)
+                            state.dismissAlert()
+                        },
+                        onHelp = {
+                            answerRiskCheck(RiskAnswers.HELP)
+                            requestHelp()
+                        },
                     )
                 AlertStage.Alerted ->
                     GuardianAlertedScreen(
@@ -64,7 +92,7 @@ fun WearApp() {
                         mapBackground = state.mapBackground,
                         // 명세: SOS는 어느 상태에서든 바로 위험상황으로 보낸다.
                         onSos = requestHelp,
-                        // 지금은 방패 아이콘 길게 누르기(테스트용)로 호출된다. AI 서버가 연결되면 실제 위험 신호에서 호출한다.
+                        // 테스트용. 폰의 실제 위험 확인 질문(RISK_CHECK)은 DataLayerEffect로 들어온다.
                         onShieldLongPress = { state.startCheckIn(System.currentTimeMillis()) },
                     )
             }

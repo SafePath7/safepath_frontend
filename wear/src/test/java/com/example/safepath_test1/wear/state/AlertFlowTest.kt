@@ -2,6 +2,7 @@ package com.example.safepath_test1.wear.state
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -146,5 +147,63 @@ class AlertFlowTest {
         assertFalse(shouldReleaseAlert(releaseSignalAt = 0L, alertRequestedAt = 0L))
         assertTrue(shouldReleaseAlert(releaseSignalAt = 1L, alertRequestedAt = 0L))
         assertFalse(shouldReleaseAlert(releaseSignalAt = 10_000L, alertRequestedAt = 20_000L))
+    }
+
+    @Test
+    fun receiveRiskCheck_entersCheckInFromNowWithTheEvent() {
+        val state = AlertState().receiveRiskCheck("ev-1", requestedAt = 100_000L, now = 102_000L)
+        assertEquals(AlertStage.CheckIn, state.stage)
+        assertEquals(102_000L, state.checkInStartedAt)
+        assertEquals("ev-1", state.riskEventId)
+    }
+
+    @Test
+    fun receiveRiskCheck_ignoresWhileCheckingInOrAlerted() {
+        val checkingIn = AlertState().receiveRiskCheck("ev-1", 100_000L, 100_000L)
+        assertEquals("ev-1", checkingIn.receiveRiskCheck("ev-2", 101_000L, 101_000L).riskEventId)
+        val alerted = AlertState().requestHelp(now = 100_000L)
+        assertEquals(
+            AlertStage.Alerted,
+            alerted.receiveRiskCheck("ev-2", 101_000L, 101_000L).stage,
+        )
+    }
+
+    @Test
+    fun receiveRiskCheck_ignoresTheSameEventAgainAfterAnswering() {
+        val answered =
+            AlertState().receiveRiskCheck("ev-1", 100_000L, 100_000L).dismiss()
+        assertEquals(AlertStage.None, answered.receiveRiskCheck("ev-1", 100_000L, 105_000L).stage)
+        assertEquals(
+            AlertStage.CheckIn,
+            answered.receiveRiskCheck("ev-2", 105_000L, 105_000L).stage,
+        )
+    }
+
+    @Test
+    fun receiveRiskCheck_ignoresOldOrBlankChecks() {
+        val tooOld = 100_000L + RISK_CHECK_MAX_AGE_MS + 1
+        assertEquals(AlertStage.None, AlertState().receiveRiskCheck("ev-1", 100_000L, tooOld).stage)
+        assertEquals(AlertStage.None, AlertState().receiveRiskCheck("", 100_000L, 100_000L).stage)
+    }
+
+    @Test
+    fun isRiskCheckFresh_rules() {
+        assertFalse(isRiskCheckFresh(requestedAt = 0L, now = 1_000L))
+        assertTrue(isRiskCheckFresh(requestedAt = 100_000L, now = 100_000L + RISK_CHECK_MAX_AGE_MS))
+        assertFalse(
+            isRiskCheckFresh(requestedAt = 100_000L, now = 100_000L + RISK_CHECK_MAX_AGE_MS + 1),
+        )
+        // 폰 시계가 조금 빨라 질문 시각이 미래여도 띄운다.
+        assertTrue(isRiskCheckFresh(requestedAt = 103_000L, now = 100_000L))
+    }
+
+    @Test
+    fun riskAnswer_carriesTheEventOnlyForAPhoneCheck() {
+        val fromPhone = AlertState().receiveRiskCheck("ev-1", 100_000L, 100_000L)
+        assertEquals(RiskAnswer("ev-1", "SAFE", 110_000L), fromPhone.riskAnswer("SAFE", 110_000L))
+        // 방패 길게 누르기(테스트)로 띄운 확인 질문은 폰에 답하지 않는다.
+        assertNull(AlertState().startCheckIn(100_000L).riskAnswer("SAFE", 110_000L))
+        // 답한 뒤(위험상황)에는 다시 답하지 않는다.
+        assertNull(fromPhone.requestHelp(110_000L).riskAnswer("HELP", 111_000L))
     }
 }

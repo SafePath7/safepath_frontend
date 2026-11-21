@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 private const val TAG = "WatchDataReceiver"
 
 /**
- * 폰이 Data Layer로 보낸 값(길안내 상태, 지도 이미지, 위험상황 해제 신호, SOS 답장)을 받아 콜백으로 넘긴다.
+ * 폰이 Data Layer로 보낸 값(길안내 상태, 지도 이미지, 위험상황 해제 신호, SOS 답장, 위험 확인 질문)을 받아 콜백으로 넘긴다.
  *
  * 콜백은 DataClient가 부르는 스레드(메인)에서 불린다. 지도 이미지는 [scope]에서 내려받아 디코딩한 뒤
  * 그 스코프의 스레드로 돌아와 [onMapImage]를 부른다. 화면이 사라질 때 [stop]을 부른다.
@@ -23,6 +23,9 @@ private const val TAG = "WatchDataReceiver"
  * - 이미 있는 값을 읽은 결과는, 그 종류의 새 값이 리스너로 이미 온 뒤라면 버린다(옛 값이 새 값을 덮지 않게).
  * - 지도 이미지는 가장 최근 요청의 결과만 쓴다. 이미지 두 장이 연달아 와도 늦게 끝난 옛 이미지가 새 이미지를 덮지 않는다.
  * - 해제 신호와 SOS 답장은 리스너로 온 것만 쓴다. 앱을 켤 때 남아 있던 옛 값은 무시한다.
+ * - 위험 확인 질문은 이미 있는 값도 넘긴다. 앱이 꺼져 있을 때 온 질문은 WatchRiskCheckListenerService가 앱을 열고,
+ *   그 질문은 리스너 등록 전에 와 있어서 이미 있는 값으로만 읽히기 때문이다. 단, 워치가 이미 답한 질문
+ *   (워치가 쓴 RISK_ANSWER의 eventId가 같음)은 넘기지 않는다. 오래된 질문을 거르는 것은 AlertState가 한다.
  */
 internal class WatchDataReceiver(
     private val context: Context,
@@ -31,6 +34,7 @@ internal class WatchDataReceiver(
     private val onMapImage: (MapImage) -> Unit,
     private val onRelease: (updatedAt: Long) -> Unit,
     private val onSosAck: (triggeredAt: Long) -> Unit,
+    private val onRiskCheck: (RiskCheck) -> Unit,
 ) {
     private val dataClient = Wearable.getDataClient(context)
 
@@ -56,8 +60,25 @@ internal class WatchDataReceiver(
         // 리스너는 앞으로 바뀌는 값만 알려 주므로, 이미 있는 값은 따로 읽는다.
         dataClient.dataItems
             .addOnSuccessListener { dataItems ->
-                for (i in 0 until dataItems.count) handle(dataItems[i], fromListener = false)
+                // 질문과 워치의 답은 순서 없이 읽히므로 둘 다 모은 뒤에 판단한다.
+                var existingRiskCheck: RiskCheck? = null
+                var answeredEventId: String? = null
+                for (i in 0 until dataItems.count) {
+                    val item = dataItems[i]
+                    when (item.uri.path) {
+                        DataLayerPaths.RISK_CHECK ->
+                            existingRiskCheck = DataMapItem.fromDataItem(item).dataMap.toRiskCheck()
+                        DataLayerPaths.RISK_ANSWER -> {
+                            val dataMap = DataMapItem.fromDataItem(item).dataMap
+                            answeredEventId = dataMap.getString(RiskAnswerKeys.EVENT_ID)
+                        }
+                        else -> handle(item, fromListener = false)
+                    }
+                }
                 dataItems.release()
+                existingRiskCheck
+                    ?.takeIf { it.eventId != answeredEventId }
+                    ?.let(onRiskCheck)
             }
             .addOnFailureListener { e -> Log.e(TAG, "Failed to read existing DataItems", e) }
     }
@@ -94,6 +115,10 @@ internal class WatchDataReceiver(
                 if (fromListener) {
                     val dataMap = DataMapItem.fromDataItem(item).dataMap
                     onSosAck(dataMap.getLong(SosAckKeys.TRIGGERED_AT))
+                }
+            DataLayerPaths.RISK_CHECK ->
+                if (fromListener) {
+                    onRiskCheck(DataMapItem.fromDataItem(item).dataMap.toRiskCheck())
                 }
         }
     }

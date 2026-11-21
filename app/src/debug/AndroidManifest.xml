@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
-  <application android:networkSecurityConfig="@xml/debug_network_security_config" />
+  <application android:networkSecurityConfig="@xml/debug_network_security_config">
+    <!-- 디버그 전용: adb로 워치에 위험 확인 질문을 보낸다(WearRiskCheckDebugReceiver). adb shell이 부를 수 있게 exported다. -->
+    <receiver android:name=".wear.WearRiskCheckDebugReceiver" android:exported="true" />
+  </application>
 </manifest>

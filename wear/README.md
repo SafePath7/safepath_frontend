@@ -18,7 +18,7 @@ SafePath의 워치 앱과, 폰 앱에서 워치와 통신하는 부분을 설명
 | --- | --- |
 | `comm` | 폰이 보낸 값 받기(`WatchDataReceiver`)와 해석(`StatusDecoder`, `MapImageLoader`) |
 | `geo` | 거리·방향 계산, 경로 위 진행 위치(`RoutePath`) |
-| `launch` | 폰의 "워치 앱 열기" 신호 받기(`WatchLaunchListenerService`) |
+| `launch` | 앱이 꺼져 있을 때 앱 열기: 폰의 "워치 앱 열기"(`WatchLaunchListenerService`), 위험 확인 질문(`WatchRiskCheckListenerService`), 공용 열기(`WatchAppOpener`) |
 | `presentation` | 화면(`MainScreen`, `GuidancePage`, `SafetyScreens`), 화면 상태(`WearAppState`), 부작용(`WearEffects`) |
 | `sensors` | 센서·마이크 수집과 폰으로 보내기(`Watch*Sender`, `DataLayerSender`) |
 | `state` | 화면과 떨어진 순수 상태 규칙(`AlertFlow`, `WatchState`) |
@@ -38,9 +38,11 @@ DataClient는 폰과 워치의 **applicationId가 같아야** 동작한다(`com.
 | `RELEASE` | 폰 → 워치 | `WearMessenger.sendRelease` | `WatchDataReceiver` | 위험상황 해제 |
 | `SOS_ACK` | 폰 → 워치 | `WearMessenger.sendSosAck` | `WatchDataReceiver` | SOS를 받았다는 답장 |
 | `LAUNCH_WATCH` | 폰 → 워치 | `WatchLauncher` | `WatchLaunchListenerService` | 워치 앱 열기 |
+| `RISK_CHECK` | 폰 → 워치 | `WearMessenger.sendRiskCheck` | `WatchDataReceiver`, `WatchRiskCheckListenerService` | 위험 확인 질문(eventId, riskType, requestedAt) |
 | `SOS` | 워치 → 폰 | `WatchSosSender` | `WearSosRelayService` | SOS |
 | `VOICE` | 워치 → 폰 | `WatchVoiceSender` | `WearVoiceRelayService` | 1초 음성 조각(AAC) |
 | `MOTION` | 워치 → 폰 | `WatchMotionSender` | `WearDataRelayService` | 가속도·자이로 1초 묶음(20Hz, 배열) |
+| `RISK_ANSWER` | 워치 → 폰 | `WatchRiskAnswerSender` | `WearRiskRelayService` | 확인 질문의 답(SAFE / HELP / NO_RESPONSE) |
 
 DataClient는 내용이 같은 DataItem을 다시 보내지 않으므로, 보낼 때마다 시각 값(`updatedAt`, `triggeredAt` 등)을 담는다.
 
@@ -52,13 +54,36 @@ DataClient는 내용이 같은 DataItem을 다시 보내지 않으므로, 보낼
 ## 위험상황 흐름
 
 ```
-평소(None) ──방패 길게 누르기(테스트)──▶ 확인 질문(CheckIn, 30초)
-   │                                        │ "도움 요청" 또는 시간 초과
-   └──────────────SOS 버튼────────────────▶ 위험상황(Alerted)
-                                              │ 폰의 RELEASE
-                                              ▼
-                                            평소(None)
+평소(None) ──폰의 RISK_CHECK / 방패 길게 누르기(테스트)──▶ 확인 질문(CheckIn, 30초)
+   │                                    "괜찮아요" ◀─┤ (SAFE → 평소)
+   │                                                  │ "도움 요청"(HELP) 또는 시간 초과(NO_RESPONSE)
+   └────────────────────SOS 버튼───────────────────▶ 위험상황(Alerted)
+                                                       │ 폰의 RELEASE
+                                                       ▼
+                                                     평소(None)
 ```
+
+### 위험 확인 질문(RISK_CHECK)
+
+폰이 `RISK_CHECK`를 보내면 워치는 확인 질문을 띄우고, 답을 `RISK_ANSWER`로 돌려준다.
+HELP와 NO_RESPONSE일 때는 지금처럼 SOS도 함께 보낸다. 방패 길게 누르기로 띄운 질문은 폰에 답하지 않는다.
+
+- 확인 질문이 뜨면 진동(0.3초 세 번)하고, 질문이 떠 있는 동안 화면을 켜 둔다(`CheckInAlertEffect`). 테스트 질문도 같다.
+- 평소 상태일 때만 띄운다. 확인 질문 중이거나 위험상황이면 새 질문은 무시한다.
+- 질문 시각이 30초(+시계 오차 5초)보다 오래됐으면 띄우지 않는다. 연결이 끊겼다가 늦게 온 질문이나
+  Data Layer에 남은 옛 질문이 다시 뜨지 않게 하기 위해서다. 남은 시간은 워치에 띄운 때부터 센다.
+- 이미 띄우거나 답한 eventId는 다시 띄우지 않는다. 앱을 다시 켜도 워치가 쓴 `RISK_ANSWER`로 알아본다.
+- 앱이 화면에 없으면 `WatchRiskCheckListenerService`가 앱을 열고(바로 열기 + "괜찮으신가요?" 알림),
+  열린 앱이 이미 와 있는 질문을 읽어 띄운다. 앱이 보이면 다시 열지 않는다(`WatchAppVisibility`).
+- 폰은 지금 답을 로그로만 남긴다(`WearRiskRelayService`). 백엔드 반영은 다음 작업이다.
+
+디버그 빌드의 폰에서 adb로 질문을 보내 시험할 수 있다(`WearRiskCheckDebugReceiver`, 릴리스에는 없음).
+
+```powershell
+adb -s <폰 시리얼> shell am broadcast -n com.example.safepath_test1/.wear.WearRiskCheckDebugReceiver --es eventId test-1 --es riskType FALL
+```
+
+같은 eventId는 다시 뜨지 않으므로 시험할 때마다 바꾸거나 `--es eventId`를 빼서 새 ID를 쓰게 한다.
 
 위험상황에서는 SOS가 폰까지 갔는지를 함께 보여 준다(`SosDelivery`).
 
@@ -101,3 +126,7 @@ DataClient는 내용이 같은 DataItem을 다시 보내지 않으므로, 보낼
 - 폰의 해제 본인 확인(생체인증·PIN)은 세션 시작 흐름과 아직 연결되지 않았다.
 - 위험상황 화면의 "휴대폰에서 해제"를 길게 누르면 해제되는 테스트용 동작이 남아 있다(제거 예정).
 - 두 점 사이 거리 계산(haversine)이 폰(`WearMapFrame.kt`)과 워치(`geo/GeoMath.kt`)에 따로 있다.
+- 폰의 "워치 앱 열기"(`LAUNCH_WATCH`)는 앱이 이미 열려 있어도 화면을 새로 만들어 지금 상태(위험상황 등)를 잃을 수 있다
+  (`CLEAR_TOP`만 쓰고 `SINGLE_TOP`이 없음). 위험 확인 질문의 앱 열기는 `SINGLE_TOP`을 써서 이 문제가 없다.
+- 위험 확인 질문의 답은 폰 로그까지만 가고 아직 백엔드에 반영되지 않는다. 워치가 연결돼 있지 않아 답이 없는 질문의 처리도 아직 없다.
+- `riskType` 값 목록과 위험 이벤트 ID 형식이 정해지지 않았다. 지금은 둘 다 문자열로 그대로 전달만 한다.

@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.safepath_test1.wear.launch.WatchAppVisibility
 
 class MainActivity : ComponentActivity() {
     // POST_NOTIFICATIONS: Android 13+에서는 실행 중 권한이라, WatchLaunchListenerService의 대체 알림
@@ -25,5 +26,16 @@ class MainActivity : ComponentActivity() {
             }
         requestPermissions.launch(permissions.toTypedArray())
         setContent { WearApp() }
+    }
+
+    // 화면이 보이는 동안에는 WatchRiskCheckListenerService가 앱을 다시 열지 않는다(WatchAppVisibility 참고).
+    override fun onStart() {
+        super.onStart()
+        WatchAppVisibility.isVisible = true
+    }
+
+    override fun onStop() {
+        WatchAppVisibility.isVisible = false
+        super.onStop()
     }
 }
