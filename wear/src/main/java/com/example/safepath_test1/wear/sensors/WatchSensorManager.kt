@@ -6,25 +6,28 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 private const val TAG = "WatchSensorManager"
 
-/** 20Hz(1000ms / 20 = 샘플당 50ms). AI 동작 모델이 기대하는 측정 속도와 같다. */
-private const val SAMPLING_PERIOD_US = 50_000
+/** [MOTION_RATE_HZ](20Hz, 샘플당 50ms)로 읽는다. AI 동작 모델이 기대하는 측정 속도와 같다. */
+private const val SAMPLING_PERIOD_US = 1_000_000 / MOTION_RATE_HZ
 
 /**
  * 워치에 내장된 가속도계와 자이로스코프를 읽는다.
  *
  * 사용법(WearEffects.kt의 SensorEffect 참고): DisposableEffect에서 두 센서 수집을 시작하고 onDispose에서
- * stopCollection()을 불러 화면이 사라지면 멈추게 한 뒤, [motionData]를 collect해서 값을 전달한다.
+ * stopCollection()을 불러 화면이 사라지면 멈추게 한 뒤, [motionBatches]를 collect해서 1초 묶음을 전달한다.
+ *
+ * 샘플은 센서 콜백 안에서 바로 [MotionBatcher]에 넣어 묶는다. 최신 값 하나만 들고 있는 StateFlow로 넘기면
+ * 받는 쪽이 늦을 때 중간 샘플이 덮어써져 빠지기 때문이다.
  *
  * 동작 분석에 충분한 해상도를 위해 예전 기본값(약 5Hz)이 아니라 20Hz(SAMPLING_PERIOD_US)로 고정해 읽는다.
  * 이 속도에는 실행 중 권한이 필요 없다. HIGH_SAMPLING_RATE_SENSORS는 Android 12+에서 200Hz를 넘을 때만 필요하다.
  */
-class WatchSensorManager(context: Context) {
+internal class WatchSensorManager(context: Context) {
 
     private val sensorManager =
         context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -33,9 +36,12 @@ class WatchSensorManager(context: Context) {
 
     private val accumulator = MotionSampleAccumulator()
 
-    private val _motionData = MutableStateFlow<MotionData?>(null)
-    /** 두 센서를 합친 최신 값. 두 센서가 모두 한 번 이상 값을 보내기 전까지는 null이다. */
-    val motionData: StateFlow<MotionData?> = _motionData.asStateFlow()
+    private val batcher = MotionBatcher()
+
+    private val _motionBatches = MutableSharedFlow<MotionBatch>(extraBufferCapacity = 8)
+
+    /** 두 센서를 합친 20Hz 샘플의 1초 묶음. 두 센서가 모두 값을 보내기 시작해야 나온다. */
+    val motionBatches: SharedFlow<MotionBatch> = _motionBatches.asSharedFlow()
 
     private val listener =
         object : SensorEventListener {
@@ -60,7 +66,9 @@ class WatchSensorManager(context: Context) {
                             )
                         else -> return
                     } ?: return
-                _motionData.value = updated
+                batcher.add(updated)?.let { batch ->
+                    if (!_motionBatches.tryEmit(batch)) Log.w(TAG, "Dropped a motion batch")
+                }
                 // 20Hz라 로그 문자열을 매번 만들면 낭비다. 필요할 때만
                 // `adb shell setprop log.tag.WatchSensorManager DEBUG`로 켠다.
                 if (Log.isLoggable(TAG, Log.DEBUG)) {
@@ -96,6 +104,6 @@ class WatchSensorManager(context: Context) {
     fun stopCollection() {
         sensorManager.unregisterListener(listener)
         accumulator.reset()
-        _motionData.value = null
+        batcher.reset()
     }
 }

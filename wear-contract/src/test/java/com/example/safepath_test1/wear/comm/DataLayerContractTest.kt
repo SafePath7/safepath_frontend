@@ -71,10 +71,11 @@ class DataLayerContractTest {
     @Test
     fun motionKeys_matchPhone() {
         assertEquals(
-            listOf("accelX", "accelY", "accelZ", "gyroX", "gyroY", "gyroZ", "timestamp"),
+            listOf("rateHz", "timestamps", "accelX", "accelY", "accelZ", "gyroX", "gyroY", "gyroZ"),
             listOf(
+                MotionKeys.RATE_HZ, MotionKeys.TIMESTAMPS,
                 MotionKeys.ACCEL_X, MotionKeys.ACCEL_Y, MotionKeys.ACCEL_Z,
-                MotionKeys.GYRO_X, MotionKeys.GYRO_Y, MotionKeys.GYRO_Z, MotionKeys.TIMESTAMP,
+                MotionKeys.GYRO_X, MotionKeys.GYRO_Y, MotionKeys.GYRO_Z,
             ),
         )
     }

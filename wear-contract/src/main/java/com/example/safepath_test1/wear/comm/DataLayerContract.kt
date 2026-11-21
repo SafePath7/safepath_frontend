@@ -23,7 +23,7 @@ object DataLayerPaths {
     /** 폰 → 워치: 워치 앱 열기. AndroidManifest.xml의 WatchLaunchListenerService pathPrefix와 같은 값이어야 한다. */
     const val LAUNCH_WATCH = "/safepath/launch_watch"
 
-    /** 워치 → 폰: 가속도·자이로. */
+    /** 워치 → 폰: 가속도·자이로. 20Hz 샘플을 1초씩 묶어 보낸다. */
     const val MOTION = "/safepath/motion"
 
     /** 워치 → 폰: 음성 조각. */
@@ -79,15 +79,26 @@ object LaunchKeys {
     const val REQUESTED_AT = "requestedAt"
 }
 
-/** [DataLayerPaths.MOTION] DataMap 키. */
+/**
+ * [DataLayerPaths.MOTION] DataMap 키. 워치는 20Hz 샘플을 1초씩 모아 배열로 보낸다.
+ * 모든 배열의 길이가 같고, 같은 위치(i번째)의 값들이 샘플 하나다.
+ */
 object MotionKeys {
+    /** 측정 속도(Hz, Int). */
+    const val RATE_HZ = "rateHz"
+
+    /** 샘플별 측정 시각(LongArray, Unix epoch 밀리초). AI 서버의 `captured_at`과 같은 기준이다. */
+    const val TIMESTAMPS = "timestamps"
+
+    /** 샘플별 가속도(FloatArray, m/s²). */
     const val ACCEL_X = "accelX"
     const val ACCEL_Y = "accelY"
     const val ACCEL_Z = "accelZ"
+
+    /** 샘플별 각속도(FloatArray, rad/s). */
     const val GYRO_X = "gyroX"
     const val GYRO_Y = "gyroY"
     const val GYRO_Z = "gyroZ"
-    const val TIMESTAMP = "timestamp"
 }
 
 /** [DataLayerPaths.VOICE] DataMap 키와 값. */
