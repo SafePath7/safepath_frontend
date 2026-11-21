@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.ReleaseKeys
+import com.example.safepath_test1.wear.comm.RiskCheckKeys
 import com.example.safepath_test1.wear.comm.SosAckKeys
 import com.example.safepath_test1.wear.comm.StatusKeys
 import com.example.safepath_test1.wear.comm.StatusStates
@@ -131,6 +132,30 @@ internal object WearMessenger {
             .putDataItem(request)
             .addOnSuccessListener { Log.i(TAG, "SOS ack synced triggeredAt=$triggeredAt") }
             .addOnFailureListener { e -> Log.e(TAG, "SOS ack failed", e) }
+    }
+
+    /**
+     * 워치에 위험 확인 질문("괜찮으신가요?")을 보낸다. 워치는 확인 질문 화면을 띄우고, 답을 WearRiskRelayService로 보낸다.
+     * 워치는 질문 시각이 30초(+시계 오차 5초)보다 오래됐거나 이미 답한 [eventId]면 띄우지 않는다.
+     * 같은 이벤트를 다시 물어도 걸러지지 않게 매번 requestedAt(현재 시각)을 담는다.
+     */
+    fun sendRiskCheck(context: Context, eventId: String, riskType: String) {
+        val requestedAt = System.currentTimeMillis()
+        val request =
+            PutDataMapRequest.create(DataLayerPaths.RISK_CHECK)
+                .apply {
+                    dataMap.putString(RiskCheckKeys.EVENT_ID, eventId)
+                    dataMap.putString(RiskCheckKeys.RISK_TYPE, riskType)
+                    dataMap.putLong(RiskCheckKeys.REQUESTED_AT, requestedAt)
+                }
+                .asPutDataRequest()
+                .setUrgent()
+        Wearable.getDataClient(context)
+            .putDataItem(request)
+            .addOnSuccessListener {
+                Log.i(TAG, "Risk check synced eventId=$eventId riskType=$riskType at=$requestedAt")
+            }
+            .addOnFailureListener { e -> Log.e(TAG, "Risk check failed eventId=$eventId", e) }
     }
 
     fun sendIdle(context: Context) {
