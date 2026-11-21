@@ -1,6 +1,7 @@
 package com.example.safepath_test1.wear.comm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /**
@@ -18,6 +19,8 @@ class DataLayerContractTest {
         assertEquals("/safepath/voice", DataLayerPaths.VOICE)
         assertEquals("/safepath/sos", DataLayerPaths.SOS)
         assertEquals("/safepath/sos_ack", DataLayerPaths.SOS_ACK)
+        assertEquals("/safepath/risk_check", DataLayerPaths.RISK_CHECK)
+        assertEquals("/safepath/risk_answer", DataLayerPaths.RISK_ANSWER)
     }
 
     @Test
@@ -32,8 +35,17 @@ class DataLayerContractTest {
                 DataLayerPaths.VOICE,
                 DataLayerPaths.SOS,
                 DataLayerPaths.SOS_ACK,
+                DataLayerPaths.RISK_CHECK,
+                DataLayerPaths.RISK_ANSWER,
             )
         assertEquals(all.size, all.toSet().size)
+    }
+
+    @Test
+    fun riskPaths_notCaughtBySosPrefix() {
+        // 폰 매니페스트의 WearSosRelayService pathPrefix가 "/safepath/sos"라서, 그 접두어로 시작하면 SOS로 잘못 받는다.
+        assertFalse(DataLayerPaths.RISK_CHECK.startsWith(DataLayerPaths.SOS))
+        assertFalse(DataLayerPaths.RISK_ANSWER.startsWith(DataLayerPaths.SOS))
     }
 
     @Test
@@ -91,5 +103,21 @@ class DataLayerContractTest {
         )
         assertEquals("triggeredAt", SosKeys.TRIGGERED_AT)
         assertEquals("triggeredAt", SosAckKeys.TRIGGERED_AT)
+    }
+
+    @Test
+    fun riskKeys_matchPhone() {
+        assertEquals(
+            listOf("eventId", "riskType", "requestedAt"),
+            listOf(RiskCheckKeys.EVENT_ID, RiskCheckKeys.RISK_TYPE, RiskCheckKeys.REQUESTED_AT),
+        )
+        assertEquals(
+            listOf("eventId", "answer", "answeredAt"),
+            listOf(RiskAnswerKeys.EVENT_ID, RiskAnswerKeys.ANSWER, RiskAnswerKeys.ANSWERED_AT),
+        )
+        assertEquals(
+            listOf("SAFE", "HELP", "NO_RESPONSE"),
+            listOf(RiskAnswers.SAFE, RiskAnswers.HELP, RiskAnswers.NO_RESPONSE),
+        )
     }
 }

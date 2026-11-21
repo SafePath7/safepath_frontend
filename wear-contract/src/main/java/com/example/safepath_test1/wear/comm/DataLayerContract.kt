@@ -34,6 +34,15 @@ object DataLayerPaths {
 
     /** 폰 → 워치: SOS를 받았다는 답장. 워치는 이 답장이 와야 "전달됨"으로 보여 준다. */
     const val SOS_ACK = "/safepath/sos_ack"
+
+    /**
+     * 폰 → 워치: 위험 확인 질문("괜찮으신가요?"). 워치는 확인 질문 화면을 띄운다.
+     * "/safepath/sos"로 시작하지 않게 지었다. 폰 매니페스트의 SOS pathPrefix에 걸리지 않게 하기 위해서다.
+     */
+    const val RISK_CHECK = "/safepath/risk_check"
+
+    /** 워치 → 폰: 위험 확인 질문에 대한 답. */
+    const val RISK_ANSWER = "/safepath/risk_answer"
 }
 
 /** [DataLayerPaths.STATUS] DataMap 키와 값. */
@@ -124,4 +133,40 @@ object SosKeys {
 object SosAckKeys {
     /** 받은 SOS의 [SosKeys.TRIGGERED_AT]을 그대로 돌려준다. 워치는 지금 위험상황의 요청 시각과 같을 때만 전달됨으로 본다. */
     const val TRIGGERED_AT = "triggeredAt"
+}
+
+/** [DataLayerPaths.RISK_CHECK] DataMap 키. */
+object RiskCheckKeys {
+    /** 위험 이벤트 ID(String). 숫자 ID여도 문자열로 담는다. 워치는 답할 때 그대로 돌려준다. */
+    const val EVENT_ID = "eventId"
+
+    /** 위험 종류(String). 값 목록이 아직 정해지지 않아 워치는 기록만 하고 해석하지 않는다. */
+    const val RISK_TYPE = "riskType"
+
+    /** 폰이 질문을 보낸 시각(Long, Unix epoch 밀리초). 같은 질문을 다시 보내도 걸러지지 않게 매번 담는다. */
+    const val REQUESTED_AT = "requestedAt"
+}
+
+/** [DataLayerPaths.RISK_ANSWER] DataMap 키. */
+object RiskAnswerKeys {
+    /** 답한 질문의 [RiskCheckKeys.EVENT_ID]를 그대로 돌려준다. */
+    const val EVENT_ID = "eventId"
+
+    /** 답([RiskAnswers]의 값 중 하나, String). */
+    const val ANSWER = "answer"
+
+    /** 워치에서 답이 정해진 시각(Long, Unix epoch 밀리초). */
+    const val ANSWERED_AT = "answeredAt"
+}
+
+/** [RiskAnswerKeys.ANSWER]가 가질 수 있는 값. */
+object RiskAnswers {
+    /** "괜찮아요"를 눌렀다. */
+    const val SAFE = "SAFE"
+
+    /** "도움 요청"을 눌렀다. */
+    const val HELP = "HELP"
+
+    /** 제한 시간 안에 아무것도 누르지 않았다. */
+    const val NO_RESPONSE = "NO_RESPONSE"
 }
