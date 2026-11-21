@@ -40,9 +40,13 @@ DataClient는 폰과 워치의 **applicationId가 같아야** 동작한다(`com.
 | `LAUNCH_WATCH` | 폰 → 워치 | `WatchLauncher` | `WatchLaunchListenerService` | 워치 앱 열기 |
 | `SOS` | 워치 → 폰 | `WatchSosSender` | `WearSosRelayService` | SOS |
 | `VOICE` | 워치 → 폰 | `WatchVoiceSender` | `WearVoiceRelayService` | 1초 음성 조각(AAC) |
-| `MOTION` | 워치 → 폰 | `WatchMotionSender` | `WearDataRelayService` | 가속도·자이로 |
+| `MOTION` | 워치 → 폰 | `WatchMotionSender` | `WearDataRelayService` | 가속도·자이로 1초 묶음(20Hz, 배열) |
 
 DataClient는 내용이 같은 DataItem을 다시 보내지 않으므로, 보낼 때마다 시각 값(`updatedAt`, `triggeredAt` 등)을 담는다.
+
+움직임은 워치가 20Hz로 읽어 1초씩 묶어 보낸다(`MotionBatcher`, 초당 한 번 전송).
+폰은 최근 움직임을 `recentMotion`에 쌓아 두고, AI 분석 요청 때 음성 3초 창과 같은 구간을 꺼내 쓴다.
+시각은 모두 Unix epoch 밀리초라 음성의 `capturedAt`과 바로 비교할 수 있다.
 "보냈다" 로그는 워치나 폰의 Data Layer에 넣었다는 뜻이지 상대에게 도착했다는 뜻이 아니다.
 
 ## 위험상황 흐름
@@ -96,5 +100,4 @@ DataClient는 내용이 같은 DataItem을 다시 보내지 않으므로, 보낼
 - 워치 SOS는 폰 알림까지만 가고 아직 서버(보호자 알림)로 가지 않는다.
 - 폰의 해제 본인 확인(생체인증·PIN)은 세션 시작 흐름과 아직 연결되지 않았다.
 - 위험상황 화면의 "휴대폰에서 해제"를 길게 누르면 해제되는 테스트용 동작이 남아 있다(제거 예정).
-- 센서 값은 값이 바뀔 때마다 보낸다(최대 초당 40번). 1초에 한 번으로 줄일 예정이다.
 - 두 점 사이 거리 계산(haversine)이 폰(`WearMapFrame.kt`)과 워치(`geo/GeoMath.kt`)에 따로 있다.
