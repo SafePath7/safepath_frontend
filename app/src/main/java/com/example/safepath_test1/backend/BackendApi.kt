@@ -12,9 +12,24 @@ data class GuardianRequest(val guardianId: Long)
 data class GuardianPermissions(val canViewLocation: Boolean, val canViewStatus: Boolean, val canViewPersonalInfo: Boolean)
 data class SosResult(val successCount: Int, val failureCount: Int)
 data class FcmTokenBody(val fcmToken: String)
-data class BackendSession(val id: String, val startedAt: String)
+data class BackendSession(val id: String, val startedAt: String, val selectedRoute: SelectedRouteBody? = null, val channelId: String? = null)
 data class MonitoringChannel(val channelId: String)
 data class RouteCoordinate(val latitude: Double, val longitude: Double)
+internal data class RouteSearchBody(val origin: RouteCoordinate, val destination: RouteCoordinate)
+internal data class ServerRoutes(val candidateCount: Int, val routes: List<ServerRoute>)
+internal data class ServerRoute(
+    val type: String,
+    val coordinates: List<RouteCoordinate>,
+    val distanceMeters: Double,
+    val durationSeconds: Double,
+    val safetyScore: Double?,
+    val sameAsTypes: List<String>,
+)
+
+internal interface RouteSearchApi {
+    @POST("api/routes")
+    suspend fun routes(@Header("Authorization") auth: String, @Body body: RouteSearchBody): ServerRoutes
+}
 data class SelectedRouteBody(val type: String, val coordinates: List<RouteCoordinate>, val distanceMeters: Double, val durationSeconds: Double, val safetyScore: Double?, val destinationName: String?)
 data class StartSessionBody(val guardianIds: List<Long>, val selectedRoute: SelectedRouteBody?)
 internal fun serverRouteType(value: String): String = when (value) {

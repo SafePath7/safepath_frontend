@@ -79,9 +79,16 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
         }
     }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var locationUpdatedAt by remember { mutableStateOf<Long?>(null) }
     val uid = FirebaseAuth.getInstance().currentUser?.uid
     val sessions = remember(context) { context.getSharedPreferences("backend_sessions", android.content.Context.MODE_PRIVATE) }
     var sessionId by remember(uid) { mutableStateOf(uid?.let { sessions.getString(it, null) }) }
+    var sessionRoute by remember(uid) { mutableStateOf<com.example.safepath_test1.api.SelectedRouteBody?>(null) }
+    fun startLocationSharing(userId: String, channel: String) {
+        val intent = android.content.Intent(context, com.example.safepath_test1.session.JourneyLocationService::class.java)
+            .putExtra("uid", userId).putExtra("channel", channel)
+        ContextCompat.startForegroundService(context, intent)
+    }
     var testJourneyPending by remember(uid) { mutableStateOf(sessionId != null) }
     val testJourneyActive = sessionId != null
     var showGuardianManagement by rememberSaveable { mutableStateOf(false) }
@@ -99,9 +106,22 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
         catch (e: Exception) { Log.w("SafePath", "Could not refresh guardians", e) }
         val saved = sessionId
         if (saved != null) {
-            try { backendRepository.sessionStatus(saved) }
+            JourneyEndAuth.restore(context, uid, saved)
+            try {
+                sessionRoute = backendRepository.sessionStatus(saved).selectedRoute
+                val channel = sessions.getString("$uid.channel", null)
+                if (channel != null && isLocationPermissionGranted(context)) startLocationSharing(uid, channel)
+            }
             catch (e: retrofit2.HttpException) {
-                if (e.code() == 404) { sessions.edit().remove(uid).apply(); sessionId = null; JourneyEndAuth.clear() }
+                if (e.code() == 404) {
+                    JourneyEndAuth.forget(context, uid, saved)
+                    sessions.getString("$uid.channel", null)?.let { channel ->
+                        com.example.safepath_test1.session.LocationQueue(context).use { it.clear(uid, channel) }
+                    }
+                    sessions.edit().remove(uid).remove("$uid.channel").apply()
+                    context.stopService(android.content.Intent(context, com.example.safepath_test1.session.JourneyLocationService::class.java))
+                    sessionId = null; JourneyEndAuth.clear()
+                }
                 else android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show()
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
@@ -126,8 +146,9 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     LaunchedEffect(permissionRevision) {
         hasLocationPermission = isLocationPermissionGranted(context)
     }
-    AppLocationTracker(context, hasLocationPermission) { location, _ ->
+    AppLocationTracker(context, hasLocationPermission) { location, _, measuredAt ->
         currentLocation = location
+        locationUpdatedAt = measuredAt
     }
 
     val tab = SafePathTab.entries.find { it.name == selectedTab } ?: SafePathTab.Home
@@ -145,10 +166,15 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
             SafePathTab.Home ->
                 HomeScreen(
                     currentLocation = currentLocation,
+                    locationUpdatedAt = locationUpdatedAt,
                     hasLocationPermission = hasLocationPermission,
                     testJourneyActive = testJourneyActive,
                     testJourneyPending = testJourneyPending,
+                    sessionRoute = sessionRoute,
                     onTestJourneyStart = { route, _, destinationName, selectedRegistrations, _, _, _, _, routeType ->
+                        if (testJourneyPending || sessionId != null) {
+                            android.widget.Toast.makeText(context, "이미 진행 중인 귀가가 있습니다.", android.widget.Toast.LENGTH_LONG).show()
+                        } else {
                         testJourneyPending = true
                         scope.launch {
                             try {
@@ -160,7 +186,8 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                                         ?: error("선택한 보호자의 연결 또는 위치 권한을 다시 확인해 주세요.")
                                 }
                                 check(selected.isNotEmpty()) { "위치 권한이 있는 보호자를 선택해 주세요." }
-                                val serverRoute = route?.let { value ->
+                                check(selected.map { it.guardianId }.distinct().size == selected.size) { "보호자가 중복 선택됐어요." }
+                                val serverRoute = requireNotNull(route) { "경로를 선택해 주세요." }.let { value ->
                                     val points = value.geometryPoints.map { com.example.safepath_test1.api.RouteCoordinate(it.latitude, it.longitude) }
                                     check(points.size in 2..10000 && value.distanceMeters in 0.0..20000.0) { "서버에 전달할 경로 정보를 확인해 주세요." }
                                     val serverType = com.example.safepath_test1.api.serverRouteType(routeType)
@@ -170,15 +197,29 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                                 }
                                 val session = backendRepository.startSession(selected.map { it.guardianId }, serverRoute)
                                 check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }
-                                if (!sessions.edit().putString(user, session.id).commit()) {
+                                val channel = session.channelId
+                                if (!sessions.edit().putString(user, session.id).putString("$user.channel", channel).commit()) {
                                     runCatching { backendRepository.endSession(session.id) }
                                     error("세션을 기기에 저장하지 못했습니다.")
                                 }
                                 sessionId = session.id
-                                android.widget.Toast.makeText(context, "귀가 세션이 시작됐습니다. 보호자 위치 공유는 아직 지원되지 않습니다.", android.widget.Toast.LENGTH_LONG).show()
+                                sessionRoute = serverRoute
+                                if (!runCatching { JourneyEndAuth.save(context, user, session.id) }.getOrDefault(false)) {
+                                    android.widget.Toast.makeText(context, "종료 비밀번호 복구 정보를 저장하지 못했습니다. 앱을 닫으면 기기 잠금으로 종료할 수 있습니다.", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                val sharingStarted = channel != null && isLocationPermissionGranted(context) &&
+                                    runCatching { startLocationSharing(user, channel) }.isSuccess
+                                if (!sharingStarted) {
+                                    android.widget.Toast.makeText(context, "귀가는 시작됐지만 위치 공유를 시작하지 못했습니다.", android.widget.Toast.LENGTH_LONG).show()
+                                }
                             } catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { JourneyEndAuth.clear(); android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }
+                            catch (e: Exception) {
+                                JourneyEndAuth.clear()
+                                val message = if (e is retrofit2.HttpException && e.code() == 409) "이미 진행 중인 귀가가 있습니다." else accountErrorMessage(e)
+                                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                            }
                             finally { testJourneyPending = false }
+                        }
                         }
                     },
                     onTestJourneyEnd = {
@@ -189,7 +230,12 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                                 val id = sessionId ?: error("진행 중인 세션이 없습니다.")
                                 try { backendRepository.endSession(id) } catch (e: retrofit2.HttpException) { if (e.code() != 404) throw e }
                                 check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }
-                                sessions.edit().remove(user).apply(); sessionId = null; JourneyEndAuth.clear()
+                                context.stopService(android.content.Intent(context, com.example.safepath_test1.session.JourneyLocationService::class.java))
+                                JourneyEndAuth.forget(context, user, id)
+                                sessions.getString("$user.channel", null)?.let { channel ->
+                                    com.example.safepath_test1.session.LocationQueue(context).use { it.clear(user, channel) }
+                                }
+                                sessions.edit().remove(user).remove("$user.channel").apply(); sessionId = null; sessionRoute = null; JourneyEndAuth.clear()
                                 android.widget.Toast.makeText(context, "귀가 세션이 종료되었습니다.", android.widget.Toast.LENGTH_LONG).show()
                             } catch (e: CancellationException) { throw e }
                             catch (e: Exception) { android.widget.Toast.makeText(context, accountErrorMessage(e), android.widget.Toast.LENGTH_LONG).show() }

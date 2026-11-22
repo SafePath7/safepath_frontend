@@ -114,9 +114,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     currentLocation: GeoPoint?,
+    locationUpdatedAt: Long?,
     hasLocationPermission: Boolean,
     testJourneyActive: Boolean,
     testJourneyPending: Boolean,
+    sessionRoute: com.example.safepath_test1.api.SelectedRouteBody?,
     onTestJourneyStart: (com.example.safepath_test1.location.RouteResult?, String, String, List<String>, Double?, Double?, Double?, Double?, String) -> Unit,
     onTestJourneyEnd: () -> Unit,
     origin: PlaceSelection,
@@ -197,7 +199,7 @@ fun HomeScreen(
         keyboardController?.hide()
         stage = "search"
     }
-    BackHandler(enabled = stage != "search") { returnToSearch() }
+    BackHandler(enabled = stage != "search") { if (!testJourneyActive) returnToSearch() }
     val multiRouteResult = uiState.routes
     val isRouteLoading = uiState.isRouteLoading
     val routeError = uiState.routeError
@@ -293,8 +295,12 @@ fun HomeScreen(
             testJourneyActive = testJourneyActive,
             testJourneyPending = testJourneyPending,
             onTestJourneyStart = { names, pin ->
-                com.example.safepath_test1.session.JourneyEndAuth.setEndPin(pin)
-                onTestJourneyStart(activeRoute, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
+                val prepared = runCatching { com.example.safepath_test1.session.JourneyEndAuth.setEndPin(pin) }.isSuccess
+                if (prepared) {
+                    onTestJourneyStart(activeRoute, origin.name, destination.name, names, origin.latitude, origin.longitude, destination.latitude, destination.longitude, routeType)
+                } else {
+                    Toast.makeText(context, "종료 비밀번호를 안전하게 설정할 수 없습니다.", Toast.LENGTH_LONG).show()
+                }
             },
             onTestJourneyEnd = onTestJourneyEnd,
             modifier = modifier.padding(bottom = 88.dp),
@@ -313,8 +319,12 @@ fun HomeScreen(
                     if (facilitySnackbar.showSnackbar(message, actionLabel = "다시 시도", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) facilityRetry++
                 }
             },
-            destinationPoint = destinationPoint,
-            routeLineGeoJson = if (stage == "navigation") selectedTestRoute else activeRoute?.geoJsonLineString,
+            destinationPoint = if (stage == "navigation") sessionRoute?.coordinates?.lastOrNull()?.let { GeoPoint(it.latitude, it.longitude) } else destinationPoint,
+            routeLineGeoJson = if (stage == "navigation") sessionRoute?.let { route ->
+                val points = org.json.JSONArray()
+                route.coordinates.forEach { points.put(org.json.JSONArray().put(it.longitude).put(it.latitude)) }
+                org.json.JSONObject().put("type", "LineString").put("coordinates", points).toString()
+            } ?: selectedTestRoute else activeRoute?.geoJsonLineString,
             routeLineColor = activeRouteColor,
             alternativeRouteLines =
                 if (stage == "routes")
@@ -720,9 +730,22 @@ fun HomeScreen(
         }
 
         if (stage == "navigation") {
+            val progress = remember(sessionRoute, currentLocation) {
+                if (sessionRoute != null && currentLocation != null) calculateJourneyProgress(sessionRoute, currentLocation) else null
+            }
+            val arrival = progress?.let {
+                java.text.SimpleDateFormat("a h:mm", java.util.Locale.KOREA).format(
+                    java.util.Date(System.currentTimeMillis() + (it.remainingSeconds * 1000).toLong())
+                )
+            }
             Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).padding(bottom = 88.dp), shape = RoundedCornerShape(16.dp), color = Color.White) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("귀가 세션 중 · 위치 공유 안 됨", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(sessionRoute?.destinationName?.takeIf { it.isNotBlank() } ?: "안전귀가 중", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(if (progress != null) "남은 거리 ${formatDistance(progress.remainingMeters.toInt())} · 도착 예정 ${arrival}" else if (currentLocation == null) "현재 위치를 확인하고 있어요" else "경로 정보를 확인할 수 없어요", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
+                    Text("위치 공유 상태는 알림에서 확인하세요", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    Text(locationUpdatedAt?.let {
+                        "마지막 위치 갱신 " + java.text.SimpleDateFormat("M월 d일 a h:mm:ss", java.util.Locale.KOREA).format(java.util.Date(it))
+                    } ?: "위치 갱신 기록 없음", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                     Button(onClick = {
                         endPin = ""; endPinError = false
                         val alias = com.example.safepath_test1.session.JourneyEndAuth.biometricKeyAlias
@@ -735,7 +758,7 @@ fun HomeScreen(
                                 onFallback = { if (endAuthenticationScopeActive.get()) { endAuthenticating = false; showSessionRecoveryEnd = true } })
                         } else if (com.example.safepath_test1.session.JourneyEndAuth.isAvailable) showJourneyEnd = true
                         else showSessionRecoveryEnd = true
-                    }, enabled = !testJourneyPending && !endAuthenticating) { Text("안전귀가 종료") }
+                    }, enabled = !testJourneyPending && !endAuthenticating, modifier = Modifier.fillMaxWidth()) { Text("안전귀가 종료") }
                 }
             }
         }

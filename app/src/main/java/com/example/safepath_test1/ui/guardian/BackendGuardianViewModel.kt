@@ -111,9 +111,6 @@ class BackendGuardianViewModel(application: Application) : AndroidViewModel(appl
     fun refresh() = perform { load(it) }
     fun changeGuardianInput(value: String) { mutableState.update { it.copy(guardianInput = value.filter(Char::isDigit)) } }
     fun requestGuardian(id: Long) = perform { uid ->
-        if (mutableState.value.rows.any { it.userId == mutableState.value.myId && it.guardianId == id && it.status == "REVOKED" }) {
-            error("해제한 보호자에게 다시 요청하는 기능은 서버에서 아직 지원하지 않아요.")
-        }
         backend.requestGuardian(id)
         load(uid)
         mutableState.update { it.copy(guardianInput = "") }

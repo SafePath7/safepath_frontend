@@ -77,6 +77,7 @@ fun SafePathKakaoMapView(
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnMapClick by rememberUpdatedState(onMapClick)
     val latestCurrentLocation by rememberUpdatedState(currentLocation)
+    val latestDestination by rememberUpdatedState(destinationPoint)
     val latestFacilityError by rememberUpdatedState(onFacilityError)
     val mapView = remember(context) { MapView(context) }
 
@@ -106,7 +107,7 @@ fun SafePathKakaoMapView(
             },
             object : KakaoMapReadyCallback() {
                 override fun getPosition(): LatLng {
-                    val center = latestCurrentLocation ?: SeoulFallback
+                    val center = latestCurrentLocation ?: latestDestination ?: SeoulFallback
                     return LatLng.from(center.latitude, center.longitude)
                 }
 

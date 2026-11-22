@@ -1,7 +1,14 @@
 package com.example.safepath_test1.location
 
 import android.content.Context
+import com.example.safepath_test1.api.AuthenticatedBackend
+import com.example.safepath_test1.api.RouteCoordinate
+import com.example.safepath_test1.api.RouteSearchApi
+import com.example.safepath_test1.api.RouteSearchBody
 import com.example.safepath_test1.model.GeoPoint
+import kotlinx.coroutines.CancellationException
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,6 +63,38 @@ object NavigationRepository {
         context: Context, accessToken: String, originLat: Double, originLng: Double,
         destLat: Double, destLng: Double,
     ): MultiRouteResult {
+        val serverResult = try {
+            val backend = AuthenticatedBackend(context, readTimeoutSeconds = 12)
+            val api = backend.createApi(RouteSearchApi::class.java)
+            val response = backend.request {
+                api.routes(it, RouteSearchBody(RouteCoordinate(originLat, originLng), RouteCoordinate(destLat, destLng)))
+            }
+            val byType = buildMap {
+                for (route in response.routes) {
+                    val points = route.coordinates.map { GeoPoint(it.latitude, it.longitude) }
+                    if (points.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0 ||
+                        points.any { it.latitude !in -90.0..90.0 || it.longitude !in -180.0..180.0 }) continue
+                    val coordinates = JSONArray()
+                    points.forEach { coordinates.put(JSONArray().put(it.longitude).put(it.latitude)) }
+                    val result = RouteResult(
+                        geoJsonLineString = JSONObject().put("type", "LineString").put("coordinates", coordinates).toString(),
+                        distanceMeters = route.distanceMeters,
+                        safetyFacilityScore = route.safetyScore ?: 0.0,
+                        durationSeconds = route.durationSeconds,
+                        geometryPoints = points,
+                    )
+                    for (type in listOf(route.type) + route.sameAsTypes) putIfAbsent(type, result)
+                }
+            }
+            if (byType.keys.containsAll(listOf("SAFEST", "FASTEST", "RECOMMENDED"))) {
+                MultiRouteResult(byType["SAFEST"], byType["FASTEST"], byType["RECOMMENDED"], candidateRouteCount = response.candidateCount)
+            } else null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (serverResult != null) return serverResult
         if (accessToken.isBlank()) return MultiRouteResult(null,null,null,errorMessage="지도 서비스 설정을 확인해 주세요.")
         val source = synchronized(this) {
             routingClient?.takeIf { it.first == accessToken }?.second

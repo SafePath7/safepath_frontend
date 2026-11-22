@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
     android:name=".SafePathApplication"
@@ -21,6 +23,8 @@
     android:supportsRtl="true"
     android:theme="@style/Theme.SafePath"
   >
+
+        <service android:name=".session.JourneyLocationService" android:exported="false" android:foregroundServiceType="location" />
 
         <service android:name=".api.SafePathMessagingService" android:exported="false">
             <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
