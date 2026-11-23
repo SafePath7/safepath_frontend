@@ -23,6 +23,8 @@ internal data class ServerRoute(
     val distanceMeters: Double,
     val durationSeconds: Double,
     val safetyScore: Double?,
+    val observedFraction: Double,
+    val safetyFactors: Map<String, Int>,
     val sameAsTypes: List<String>,
 )
 

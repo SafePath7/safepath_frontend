@@ -193,7 +193,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                                     val serverType = com.example.safepath_test1.api.serverRouteType(routeType)
                                     com.example.safepath_test1.api.SelectedRouteBody(serverType, points, value.distanceMeters,
                                         com.example.safepath_test1.location.NavigationRepository.travelSeconds(value),
-                                        value.safetyFacilityScore.takeIf { it.isFinite() && it in 0.0..100.0 }, destinationName.take(200))
+                                        value.availableSafetyScore, destinationName.take(200))
                                 }
                                 val session = backendRepository.startSession(selected.map { it.guardianId }, serverRoute)
                                 check(FirebaseAuth.getInstance().currentUser?.uid == user) { "로그인 계정이 변경되었습니다." }

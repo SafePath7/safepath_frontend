@@ -1,6 +1,7 @@
 package com.example.safepath_test1.location
 
 import android.content.Context
+import android.util.Log
 import com.example.safepath_test1.api.AuthenticatedBackend
 import com.example.safepath_test1.api.RouteCoordinate
 import com.example.safepath_test1.api.RouteSearchApi
@@ -9,8 +10,8 @@ import com.example.safepath_test1.model.GeoPoint
 import kotlinx.coroutines.CancellationException
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import retrofit2.HttpException
+import java.io.IOException
 
 /**
  * 경로 위의 회전 지점 하나. Mapbox Directions 응답(steps=true)의 step.maneuver에서 꺼낸다.
@@ -34,7 +35,12 @@ data class RouteResult(
     val safetyMetrics: RouteSafetyMetrics? = null,
     val routeWarnings: List<String> = emptyList(),
     val assessment: SafetyAssessment? = null,
-)
+    val serverSafetyScore: Double? = null,
+    val observedFraction: Double? = null,
+    val safetyFactors: Map<String, Int> = emptyMap(),
+) {
+    val availableSafetyScore: Double? get() = serverSafetyScore ?: assessment?.score
+}
 
 data class MultiRouteResult(
     val safeRoute: RouteResult?,
@@ -57,62 +63,65 @@ data class MultiRouteResult(
 object NavigationRepository {
     internal const val recommendedSafetyWeight = 0.50
 
-    @Volatile private var routingClient: Pair<String, MapboxWalkingClient>? = null
-
     suspend fun fetchMultiRoutes(
-        context: Context, accessToken: String, originLat: Double, originLng: Double,
+        context: Context, originLat: Double, originLng: Double,
         destLat: Double, destLng: Double,
-    ): MultiRouteResult {
-        val serverResult = try {
-            val backend = AuthenticatedBackend(context, readTimeoutSeconds = 12)
-            val api = backend.createApi(RouteSearchApi::class.java)
-            val response = backend.request {
-                api.routes(it, RouteSearchBody(RouteCoordinate(originLat, originLng), RouteCoordinate(destLat, destLng)))
-            }
-            val byType = buildMap {
-                for (route in response.routes) {
-                    val points = route.coordinates.map { GeoPoint(it.latitude, it.longitude) }
-                    if (points.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0 ||
-                        points.any { it.latitude !in -90.0..90.0 || it.longitude !in -180.0..180.0 }) continue
-                    val coordinates = JSONArray()
-                    points.forEach { coordinates.put(JSONArray().put(it.longitude).put(it.latitude)) }
-                    val result = RouteResult(
-                        geoJsonLineString = JSONObject().put("type", "LineString").put("coordinates", coordinates).toString(),
-                        distanceMeters = route.distanceMeters,
-                        safetyFacilityScore = route.safetyScore ?: 0.0,
-                        durationSeconds = route.durationSeconds,
-                        geometryPoints = points,
-                    )
-                    for (type in listOf(route.type) + route.sameAsTypes) putIfAbsent(type, result)
-                }
-            }
-            if (byType.keys.containsAll(listOf("SAFEST", "FASTEST", "RECOMMENDED"))) {
-                MultiRouteResult(byType["SAFEST"], byType["FASTEST"], byType["RECOMMENDED"], candidateRouteCount = response.candidateCount)
-            } else null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
+    ): MultiRouteResult = try {
+        // 서버에서 여러 경로 후보를 조회하므로 응답에 충분한 시간을 둔다.
+        val backend = AuthenticatedBackend(context, readTimeoutSeconds = 65)
+        val api = backend.createApi(RouteSearchApi::class.java)
+        val response = backend.request {
+            api.routes(it, RouteSearchBody(RouteCoordinate(originLat, originLng), RouteCoordinate(destLat, destLng)))
         }
-        if (serverResult != null) return serverResult
-        if (accessToken.isBlank()) return MultiRouteResult(null,null,null,errorMessage="지도 서비스 설정을 확인해 주세요.")
-        val source = synchronized(this) {
-            routingClient?.takeIf { it.first == accessToken }?.second
-                ?: MapboxWalkingClient(accessToken).also { routingClient = accessToken to it }
+        mapServerRoutes(response)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: HttpException) {
+        Log.w("RouteSearch", "Route API HTTP " + e.code())
+        val message = when (e.code()) {
+            400 -> "출발지와 목적지를 확인해 주세요."
+            401, 403 -> "로그인 상태와 접근 권한을 확인해 주세요."
+            422 -> "연결되는 보행 경로를 찾지 못했어요. 출발지와 목적지를 확인해 주세요."
+            502, 503, 504 -> "경로 서버에 문제가 있어요. 잠시 후 다시 시도해 주세요."
+            else -> "경로를 불러오지 못했어요. 잠시 후 다시 시도해 주세요. (HTTP ${e.code()})"
         }
-        SafetyRepository.warmAssessmentDatasets(context.applicationContext)
-        return RouteSearchEngine(source, datasetLoader = {
-            repeat(8) {
-                val snapshot = SafetyRepository.assessmentSnapshot()
-                if (snapshot.any { (it.type == FacilityType.CCTV || it.type == FacilityType.LIGHT) && it.availability == DataAvailability.AVAILABLE })
-                    return@RouteSearchEngine snapshot
-                kotlinx.coroutines.delay(100)
-            }
-            SafetyRepository.assessmentSnapshot()
-        }).search(GeoPoint(originLat,originLng),GeoPoint(destLat,destLng)) {
-            withContext(Dispatchers.IO) {
-                SafetyRepository.getCctvFacilities(context) to SafetyRepository.getStreetlightFacilities(context)
-            }
+        MultiRouteResult(null, null, null, errorMessage = message)
+    } catch (e: IOException) {
+        Log.w("RouteSearch", "Route request failed: " + e.javaClass.simpleName)
+        MultiRouteResult(null, null, null, errorMessage = "경로 서버에 연결하지 못했어요. 네트워크와 서버 연결을 확인해 주세요.")
+    } catch (e: Exception) {
+        Log.w("RouteSearch", "Route response or configuration failed: " + e.javaClass.simpleName)
+        MultiRouteResult(null, null, null, errorMessage = "경로를 불러오지 못했어요. 로그인과 서버 설정을 확인해 주세요.")
+    }
+
+    internal fun mapServerRoutes(response: com.example.safepath_test1.api.ServerRoutes): MultiRouteResult {
+        val byType = mutableMapOf<String, RouteResult>()
+        for (route in response.routes) {
+            val points = route.coordinates.map { GeoPoint(it.latitude, it.longitude) }
+            if (points.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0 ||
+                !route.durationSeconds.isFinite() || route.durationSeconds <= 0 ||
+                points.any { !it.latitude.isFinite() || !it.longitude.isFinite() ||
+                    it.latitude !in -90.0..90.0 || it.longitude !in -180.0..180.0 }) continue
+            val coordinates = JSONArray()
+            points.forEach { coordinates.put(JSONArray().put(it.longitude).put(it.latitude)) }
+            val score = route.safetyScore?.takeIf { it.isFinite() && it in 0.0..100.0 }
+            val result = RouteResult(
+                geoJsonLineString = JSONObject().put("type", "LineString").put("coordinates", coordinates).toString(),
+                distanceMeters = route.distanceMeters, safetyFacilityScore = score ?: 0.0,
+                durationSeconds = route.durationSeconds, geometryPoints = points,
+                serverSafetyScore = score,
+                observedFraction = route.observedFraction.takeIf { it.isFinite() && it in 0.0..1.0 },
+                safetyFactors = route.safetyFactors,
+                cctvCount = route.safetyFactors["CCTV"] ?: 0,
+                streetlightCount = route.safetyFactors["SECURITY_LIGHT"] ?: 0,
+            )
+            for (type in listOf(route.type) + route.sameAsTypes) byType.putIfAbsent(type, result)
+        }
+        return if (byType.keys.containsAll(listOf("SAFEST", "FASTEST", "RECOMMENDED"))) {
+            MultiRouteResult(byType["SAFEST"], byType["FASTEST"], byType["RECOMMENDED"], candidateRouteCount = response.candidateCount)
+        } else {
+            Log.w("RouteSearch", "Route response missing required route types")
+            MultiRouteResult(null, null, null, errorMessage = "서버에서 경로 정보를 완전히 받지 못했어요. 다시 시도해 주세요.")
         }
     }
 

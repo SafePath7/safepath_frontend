@@ -71,14 +71,14 @@ fun SafePathKakaoMapView(
     remainingRouteGeoJson: String? = null,
     currentMarkerColor: String = "#5FA8D3",
     facilityRetry: Int = 0,
-    onFacilityError: (String) -> Unit = {},
+    onFacilityStatus: (com.example.safepath_test1.location.FacilityType, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnMapClick by rememberUpdatedState(onMapClick)
     val latestCurrentLocation by rememberUpdatedState(currentLocation)
     val latestDestination by rememberUpdatedState(destinationPoint)
-    val latestFacilityError by rememberUpdatedState(onFacilityError)
+    val latestFacilityStatus by rememberUpdatedState(onFacilityStatus)
     val mapView = remember(context) { MapView(context) }
 
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
@@ -224,7 +224,7 @@ fun SafePathKakaoMapView(
                 val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
                 val cctvs =
                     SafetyRepository.facilitiesNearPoint(
-                            try { SafetyRepository.getCctvFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "CCTV 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityError("CCTV 정보를 불러오지 못했어요.") }; emptyList() },
+                            try { SafetyRepository.getCctvFacilities(context).also { withContext(Dispatchers.Main) { latestFacilityStatus(com.example.safepath_test1.location.FacilityType.CCTV, true) } } } catch (e: java.io.IOException) { Log.w(MapTag, "CCTV 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityStatus(com.example.safepath_test1.location.FacilityType.CCTV, false) }; emptyList() },
                             center.latitude,
                             center.longitude,
                             FacilityDisplayRadiusMeters,
@@ -236,7 +236,7 @@ fun SafePathKakaoMapView(
                         }
                 val lights =
                     SafetyRepository.facilitiesNearPoint(
-                            try { SafetyRepository.getStreetlightFacilities(context) } catch (e: java.io.IOException) { Log.w(MapTag, "가로등 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityError("가로등 정보를 불러오지 못했어요.") }; emptyList() },
+                            try { SafetyRepository.getStreetlightFacilities(context).also { withContext(Dispatchers.Main) { latestFacilityStatus(com.example.safepath_test1.location.FacilityType.LIGHT, true) } } } catch (e: java.io.IOException) { Log.w(MapTag, "가로등 자료 조회 실패", e); withContext(Dispatchers.Main) { latestFacilityStatus(com.example.safepath_test1.location.FacilityType.LIGHT, false) }; emptyList() },
                             center.latitude,
                             center.longitude,
                             FacilityDisplayRadiusMeters,
@@ -262,8 +262,9 @@ fun SafePathKakaoMapView(
         if (!showSafetyFacilities) return@LaunchedEffect
         val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
         val stations = try { SafetyRepository.getFireStations(context) } catch (e: java.io.IOException) {
-            Log.w(MapTag, "소방시설 자료 조회 실패: ${e.message}"); latestFacilityError("소방시설 정보를 불러오지 못했어요."); return@LaunchedEffect
+            Log.w(MapTag, "소방시설 자료 조회 실패: ${e.message}"); latestFacilityStatus(com.example.safepath_test1.location.FacilityType.FIRE, false); return@LaunchedEffect
         }
+        latestFacilityStatus(com.example.safepath_test1.location.FacilityType.FIRE, true)
         val style = facilityMarkerStyle(context, "marker_fire_station.png")
         val labels = withContext(Dispatchers.Default) {
             SafetyRepository.facilitiesNearPoint(stations, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
@@ -282,8 +283,9 @@ fun SafePathKakaoMapView(
         if (!showSafetyFacilities) return@LaunchedEffect
         val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
         val police = try { SafetyRepository.getPoliceFacilities(context) } catch (e: java.io.IOException) {
-            Log.w(MapTag, "경찰시설 자료 조회 실패", e); latestFacilityError("경찰시설 정보를 불러오지 못했어요."); return@LaunchedEffect
+            Log.w(MapTag, "경찰시설 자료 조회 실패", e); latestFacilityStatus(com.example.safepath_test1.location.FacilityType.POLICE, false); return@LaunchedEffect
         }
+        latestFacilityStatus(com.example.safepath_test1.location.FacilityType.POLICE, true)
         val style = facilityMarkerStyle(context, "marker_police_station.png")
         val labels = withContext(Dispatchers.Default) {
             SafetyRepository.facilitiesNearPoint(police, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)
@@ -302,8 +304,9 @@ fun SafePathKakaoMapView(
         if (!showSafetyFacilities) return@LaunchedEffect
         val center = GeoPoint(facilityLatitudeBucket / 100.0, facilityLongitudeBucket / 100.0)
         val bells = try { SafetyRepository.getEmergencyBells(context) } catch (e: java.io.IOException) {
-            Log.w(MapTag, "비상벨 자료 조회 실패", e); latestFacilityError("비상벨 정보를 불러오지 못했어요."); return@LaunchedEffect
+            Log.w(MapTag, "비상벨 자료 조회 실패", e); latestFacilityStatus(com.example.safepath_test1.location.FacilityType.BELL, false); return@LaunchedEffect
         }
+        latestFacilityStatus(com.example.safepath_test1.location.FacilityType.BELL, true)
         val style = facilityMarkerStyle(context, "marker_safety_bell.png")
         val labels = withContext(Dispatchers.Default) {
             SafetyRepository.facilitiesNearPoint(bells, center.latitude, center.longitude, FacilityDisplayRadiusMeters, 2000)

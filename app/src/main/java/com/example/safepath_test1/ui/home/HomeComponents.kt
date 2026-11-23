@@ -77,6 +77,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -481,8 +482,10 @@ internal fun MapSideControls(
     safetyFacilitiesEnabled: Boolean,
     onRecenter: () -> Unit,
     onToggleSafetyFacilities: () -> Unit,
+    failedFacilities: Set<com.example.safepath_test1.location.FacilityType>,
+    onRetryFacilities: () -> Unit,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         RoundMapButton(
             icon = Icons.Default.LocationOn,
             enabled = locationEnabled,
@@ -495,6 +498,37 @@ internal fun MapSideControls(
             selected = safetyFacilitiesEnabled,
             onClick = onToggleSafetyFacilities,
         )
+        if (safetyFacilitiesEnabled) {
+            val facilities = listOf(
+                Triple(com.example.safepath_test1.location.FacilityType.CCTV, "CCTV", "marker_cctv.png"),
+                Triple(com.example.safepath_test1.location.FacilityType.LIGHT, "가로등", "marker_streetlight.png"),
+                Triple(com.example.safepath_test1.location.FacilityType.BELL, "비상벨", "marker_safety_bell.png"),
+                Triple(com.example.safepath_test1.location.FacilityType.POLICE, "경찰시설", "marker_police_station.png"),
+                Triple(com.example.safepath_test1.location.FacilityType.FIRE, "소방시설", "marker_fire_station.png"),
+            )
+            facilities.filter { (type, _, _) -> type in failedFacilities }.forEach { (type, label, asset) ->
+                val context = LocalContext.current
+                val bitmap = remember(asset) {
+                    runCatching { context.assets.open(asset).use { android.graphics.BitmapFactory.decodeStream(it) } }.getOrNull()
+                }
+                val failed = type in failedFacilities
+                Surface(
+                    modifier = Modifier.size(40.dp).shadow(3.dp, CircleShape)
+                        .clickable(enabled = failed, onClick = onRetryFacilities),
+                    shape = CircleShape,
+                    color = Color.White,
+                    border = if (failed) BorderStroke(2.dp, Color(0xFFD32F2F)) else null,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (bitmap != null) androidx.compose.foundation.Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = if (failed) "$label 불러오기 실패, 다시 시도" else "$label",
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -571,7 +605,7 @@ internal fun RouteOptionCard(
             // 시설 밀도는 범죄 확률이나 보정된 절대 안전 점수가 아니다.
             Text(
                 route?.let {
-                    if(it.assessment?.score == null) "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it)/60).toInt()}분 · 안전도 판단 불가" else String.format(
+                    if(it.availableSafetyScore == null) "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it)/60).toInt()}분 · 안전도 판단 불가" else String.format(
                         java.util.Locale.KOREA,
                         "약 ${kotlin.math.ceil(NavigationRepository.travelSeconds(it) / 60).toInt()}분${if (it.durationSeconds == null) " (추정)" else ""} · 시설 기반 지표 %.0f/100",
                         it.safetyFacilityScore,
@@ -581,7 +615,7 @@ internal fun RouteOptionCard(
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
             )
-            if(route?.assessment?.score != null) LinearProgressIndicator(
+            if(route?.availableSafetyScore != null) LinearProgressIndicator(
                 progress = { ((route?.safetyFacilityScore ?: 0.0) / 100.0).coerceIn(0.0,1.0).toFloat() },
                 color = lineColor,
                 trackColor = FieldBg,

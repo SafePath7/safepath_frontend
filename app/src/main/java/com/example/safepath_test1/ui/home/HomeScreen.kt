@@ -154,8 +154,7 @@ fun HomeScreen(
     var recenterToken by remember { mutableIntStateOf(0) }
     var showSafetyFacilities by rememberSaveable { mutableStateOf(true) }
     var facilityRetry by remember { mutableIntStateOf(0) }
-    val facilitySnackbar = remember { SnackbarHostState() }
-    val facilityScope = rememberCoroutineScope()
+    val failedFacilities = remember { androidx.compose.runtime.mutableStateMapOf<com.example.safepath_test1.location.FacilityType, Boolean>() }
     var activeTab by rememberSaveable { mutableStateOf("destination") }
     var isDestinationSearchOpen by rememberSaveable { mutableStateOf(false) }
     var stage by rememberSaveable { mutableStateOf("search") }
@@ -314,10 +313,8 @@ fun HomeScreen(
             recenterToken = recenterToken,
             showSafetyFacilities = showSafetyFacilities,
             facilityRetry = facilityRetry,
-            onFacilityError = { message ->
-                facilityScope.launch {
-                    if (facilitySnackbar.showSnackbar(message, actionLabel = "다시 시도", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) facilityRetry++
-                }
+            onFacilityStatus = { type, success ->
+                if (success) failedFacilities.remove(type) else failedFacilities[type] = true
             },
             destinationPoint = if (stage == "navigation") sessionRoute?.coordinates?.lastOrNull()?.let { GeoPoint(it.latitude, it.longitude) } else destinationPoint,
             routeLineGeoJson = if (stage == "navigation") sessionRoute?.let { route ->
@@ -804,7 +801,8 @@ fun HomeScreen(
             safetyFacilitiesEnabled = showSafetyFacilities,
             onRecenter = { recenterToken++ },
             onToggleSafetyFacilities = { showSafetyFacilities = !showSafetyFacilities },
+            failedFacilities = failedFacilities.keys.toSet(),
+            onRetryFacilities = { facilityRetry++ },
         )
-        SnackbarHost(facilitySnackbar, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 152.dp))
     }
 }

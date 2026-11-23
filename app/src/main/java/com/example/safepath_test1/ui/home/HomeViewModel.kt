@@ -112,7 +112,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val result =
                         NavigationRepository.fetchMultiRoutes(
                             context = context,
-                            accessToken = context.getString(R.string.mapbox_access_token),
                             originLat = origin.latitude!!,
                             originLng = origin.longitude!!,
                             destLat = destination.latitude!!,

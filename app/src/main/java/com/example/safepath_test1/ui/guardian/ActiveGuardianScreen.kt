@@ -27,12 +27,13 @@ import com.example.safepath_test1.api.accountErrorMessage
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import com.example.safepath_test1.model.GeoPoint
 import com.example.safepath_test1.ui.map.SafePathKakaoMapView
 import com.example.safepath_test1.wear.haversineMeters
 
-private data class ActiveGuardianSession(val id: String, val name: String, val startedAt: String)
+private data class ActiveGuardianSession(val id: String, val name: String, val startedAt: String, val canViewStatus: Boolean, val status: String? = null)
 
 @Composable
 fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
@@ -54,13 +55,43 @@ fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
             }
             val active = registrations.mapNotNull { registration ->
                 val session = api.activeSession(registration.userId)
-                session?.let { ActiveGuardianSession(it.id, registration.userName, it.startedAt) }
+                session?.let { ActiveGuardianSession(it.id, registration.userName, it.startedAt, registration.canViewStatus) }
             }
             check(FirebaseAuth.getInstance().currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
-            rows = active.distinctBy { it.id }.sortedByDescending { it.startedAt }
+            rows = active.distinctBy { it.id }.sortedGuardianSessions()
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = accountErrorMessage(e) }
         finally { loading = false }
+    }
+    // 서버의 목록 응답에는 상태가 없으므로 각 채널의 최신 상태를 구독한다.
+    val sessionIds = rows.map { it.id }.sorted()
+    LaunchedEffect(uid, sessionIds) {
+        if (uid == null) return@LaunchedEffect
+        kotlinx.coroutines.coroutineScope {
+            sessionIds.forEach { id ->
+                launch {
+                    while (FirebaseAuth.getInstance().currentUser?.uid == uid) {
+                        try {
+                            val channel = BackendRepository(context).monitoringChannel(id).channelId
+                            guardianLocations(context, uid, channel).collect { update ->
+                                if (FirebaseAuth.getInstance().currentUser?.uid == uid) {
+                                    rows = rows.map { row ->
+                                        if (row.id == id && row.canViewStatus) row.copy(status = update.status)
+                                        else row
+                                    }.sortedGuardianSessions()
+                                }
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            rows = rows.map { if (it.id == id) it.copy(status = null) else it }.sortedGuardianSessions()
+                        }
+                        rows = rows.map { if (it.id == id) it.copy(status = null) else it }.sortedGuardianSessions()
+                        delay(5_000)
+                    }
+                }
+            }
+        }
     }
     val selected = rows.firstOrNull { it.id == selectedId }
     if (selected != null) {
@@ -102,7 +133,7 @@ fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(row.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextMain)
                                 Surface(color = FieldBg, shape = RoundedCornerShape(50)) {
-                                    Text("상태 미확인", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = TextMuted, style = MaterialTheme.typography.labelSmall)
+                                    Text(guardianStatusLabel(row.status), modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = if (row.status == "EMERGENCY") DangerRed else TextMuted, style = MaterialTheme.typography.labelSmall)
                                 }
                                 Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
                             }
@@ -128,6 +159,7 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
     var revision by remember(session.id, uid) { mutableIntStateOf(0) }
     var location by remember(session.id, uid) { mutableStateOf<GuardianLocation?>(null) }
     var connection by remember(session.id, uid) { mutableStateOf("연결 중") }
+    val history = remember(session.id, uid) { mutableStateListOf<GuardianLocation>() }
     LaunchedEffect(session.id, uid, revision) {
         error = null
         loading = true
@@ -151,7 +183,11 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
                 val channel = BackendRepository(context).monitoringChannel(session.id).channelId
                 guardianLocations(context, uid, channel).collect { update ->
                     if (FirebaseAuth.getInstance().currentUser?.uid != uid) return@collect
-                    if (location == null || update.capturedAt > location!!.capturedAt) location = update
+                    if (location == null || update.capturedAt > location!!.capturedAt) {
+                        location = update
+                        history.add(update)
+                        if (history.size > 1000) history.removeAt(0)
+                    }
                     connection = "위치 수신 중"
                 }
                 connection = "연결이 끊겼어요. 다시 연결 중"
@@ -172,7 +208,7 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
         values.forEach { coordinates.put(org.json.JSONArray().put(it.longitude).put(it.latitude)) }
         return org.json.JSONObject().put("type", "LineString").put("coordinates", coordinates).toString()
     }
-    val travelled = nearest?.let { line(points.take(it + 1)) }
+    val travelled = line(history.map { GeoPoint(it.latitude, it.longitude) })
     val remaining = line(if (nearest == null) points else points.drop(nearest))
     val status = when (location?.status) {
         "SAFE" -> "안전"
@@ -205,6 +241,7 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(route?.destinationName?.takeIf { it.isNotBlank() } ?: "목적지 정보 없음", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(connection, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                Text("이동 기록은 이 화면을 연 뒤 수신한 위치부터 표시됩니다.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 if (loading) Text("경로 정보를 확인하고 있어요.", color = TextMuted)
                 else if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -237,3 +274,20 @@ private fun GuardianStatePanel(title: String, description: String) {
         }
     }
 }
+
+private fun guardianStatusPriority(status: String?): Int = when (status) {
+    "EMERGENCY" -> 0
+    "RISK_SUSPECTED" -> 1
+    "SAFE" -> 2
+    else -> 3
+}
+
+private fun guardianStatusLabel(status: String?): String = when (status) {
+    "EMERGENCY" -> "위험상황"
+    "RISK_SUSPECTED" -> "위험 의심"
+    "SAFE" -> "안전"
+    else -> "상태 미확인"
+}
+
+private fun List<ActiveGuardianSession>.sortedGuardianSessions(): List<ActiveGuardianSession> =
+    sortedWith(compareBy<ActiveGuardianSession> { guardianStatusPriority(it.status) }.thenByDescending { it.startedAt })
