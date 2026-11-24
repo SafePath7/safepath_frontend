@@ -1,6 +1,9 @@
 package com.example.safepath_test1.wear
 
 import android.util.Log
+import kotlinx.coroutines.*
+import com.google.firebase.auth.FirebaseAuth
+import com.example.safepath_test1.api.BackendRepository
 import com.example.safepath_test1.wear.comm.DataLayerPaths
 import com.example.safepath_test1.wear.comm.RiskAnswerKeys
 import com.google.android.gms.wearable.DataEvent
@@ -10,12 +13,6 @@ import com.google.android.gms.wearable.WearableListenerService
 
 private const val TAG = "WearRiskRelayService"
 
-/**
- * 워치가 보낸 위험 확인 질문의 답(RISK_ANSWER: SAFE / HELP / NO_RESPONSE)을 받는다.
- *
- * 지금은 로그만 남긴다. 위험 이벤트를 백엔드에 반영(PATCH)하는 것은 서버 주소와 이벤트 상태 값이 정해진 뒤에 붙인다.
- * HELP와 NO_RESPONSE일 때 워치는 SOS도 따로 보내므로, 폰 알림과 워치 답장은 WearSosRelayService가 그대로 맡는다.
- */
 class WearRiskRelayService : WearableListenerService() {
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
@@ -24,6 +21,20 @@ class WearRiskRelayService : WearableListenerService() {
             if (event.dataItem.uri.path != DataLayerPaths.RISK_ANSWER) continue
 
             val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
+            val id = dataMap.getString(RiskAnswerKeys.EVENT_ID)?.toLongOrNull() ?: continue
+            val status = serverRiskStatus(dataMap.getString(RiskAnswerKeys.ANSWER)) ?: continue
+            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: continue
+            val session = getSharedPreferences("backend_sessions", MODE_PRIVATE).getString(uid, null) ?: continue
+            val repo = BackendRepository(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val event = repo.riskEvent(id)
+                    if (event.sessionId == session && event.status == "PENDING" && FirebaseAuth.getInstance().currentUser?.uid == uid) {
+                        repo.updateRiskEventStatus(id, status)
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { Log.w(TAG, "Risk answer delivery failed", e) }
+            }
             Log.i(
                 TAG,
                 "Risk answer received from watch " +
@@ -33,4 +44,10 @@ class WearRiskRelayService : WearableListenerService() {
             )
         }
     }
+}
+
+internal fun serverRiskStatus(answer: String?): String? = when (answer) {
+    "SAFE" -> "DISMISSED"
+    "HELP", "NO_RESPONSE" -> "CONFIRMED"
+    else -> null
 }

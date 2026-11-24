@@ -27,7 +27,7 @@ class WearRiskCheckDebugReceiver : BroadcastReceiver() {
                 ?: "debug-${System.currentTimeMillis()}"
         val riskType = intent.getStringExtra(EXTRA_RISK_TYPE)?.takeIf { it.isNotBlank() } ?: "DEBUG"
         Log.i(TAG, "Debug risk check requested eventId=$eventId riskType=$riskType")
-        WearMessenger.sendRiskCheck(context, eventId, riskType)
+        WearMessenger.sendRiskCheck(context, "mock-$eventId", riskType)
     }
 
     private companion object {

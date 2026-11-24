@@ -65,6 +65,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val backendRepository = remember(context) { com.example.safepath_test1.api.BackendRepository(context) }
+    var sentSos by rememberSaveable { mutableStateOf(false) }
     var sosPending by remember { mutableStateOf(false) }
     val watchAlertAt by WatchAlertState.requestedAt.collectAsState()
     var hiddenAlertAt by remember { mutableStateOf<Long?>(null) }
@@ -73,9 +74,9 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
     var selectedTab by rememberSaveable { mutableStateOf(SafePathTab.Home.name) }
     val notificationOpenProtection by com.example.safepath_test1.api.NotificationNavigation.openProtection.collectAsState()
     LaunchedEffect(notificationOpenProtection) {
-        if (notificationOpenProtection) {
+        if (notificationOpenProtection != null) {
             selectedTab = SafePathTab.Guardian.name
-            com.example.safepath_test1.api.NotificationNavigation.consume()
+
         }
     }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -291,15 +292,31 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                 )
         }
 
+        if (testJourneyActive && tab == SafePathTab.Home) {
+            JourneySafetyControls(
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 12.dp),
+                sessionKey = requireNotNull(sessionId),
+                location = currentLocation,
+                onSos = {
+                    if (context.getSharedPreferences("safe_path_settings", android.content.Context.MODE_PRIVATE).getBoolean("sos_enabled", true)) showSosConfirmation = true
+                    else android.widget.Toast.makeText(context, "설정에서 SOS 버튼을 활성화해 주세요.", android.widget.Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
         SafePathBottomBar(
             selectedTab = tab,
             onTabSelected = { selectedTab = it.name },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 
+        if (sentSos) {
+            AlertDialog(onDismissRequest = {}, title = { Text("SOS 발송됨") },
+                text = { Text((currentLocation?.let { "내 위치 ${it.latitude}, ${it.longitude}" } ?: "현재 위치 확인 중") + "\n이미 보낸 보호자 알림은 취소할 수 없습니다.") },
+                confirmButton = { TextButton(onClick = { sentSos = false }) { Text("확인 및 화면 해제") } })
+        }
         if (showSosConfirmation) {
             AlertDialog(
-                onDismissRequest = { showSosConfirmation = false },
+                onDismissRequest = { if (!sosPending) showSosConfirmation = false },
                 title = { Text("보호자에게 SOS를 보낼까요?") },
                 text = {
                     Text("수락된 보호자에게 서버 알림을 요청합니다. 현재 서버 알림에는 위치가 포함되지 않으며 자동 신고는 되지 않습니다.")
@@ -312,6 +329,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                             scope.launch {
                                 try {
                                     val result = backendRepository.sos()
+                                    sentSos = result.successCount > 0
                                     val message = when {
                                         result.successCount == 0 && result.failureCount == 0 -> "알림을 받을 수 있는 보호자가 없습니다."
                                         result.successCount == 0 -> "SOS 알림 발송에 실패했습니다. 다른 방법으로 도움을 요청해 주세요."
@@ -373,7 +391,7 @@ internal fun SafePathMain(onLogout: () -> Unit, permissionRevision: Int) {
                     }
                 },
                 dismissButton = {
-                    TextButton(enabled = !releasePending, onClick = { hiddenAlertAt = alertAt }) { Text("나중에") }
+                    TextButton(enabled = !releasePending, onClick = { hiddenAlertAt = alertAt; showSosConfirmation = true }) { Text("보호자에게 SOS 보내기") }
                 },
             )
         }
