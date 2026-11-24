@@ -9,13 +9,21 @@ import com.kakao.vectormap.KakaoMapSdk
 import java.security.MessageDigest
 
 class SafePathApplication : Application() {
+    internal var isMapAvailable = false
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val nativeAppKey = getString(R.string.kakao_native_app_key).trim().replace("\"", "")
         if (nativeAppKey.isBlank()) {
             Log.e("SafePathApplication", "KAKAO_NATIVE_APP_KEY is missing")
         } else {
-            KakaoMapSdk.init(this, nativeAppKey)
+            try {
+                KakaoMapSdk.init(this, nativeAppKey)
+                isMapAvailable = true
+            } catch (error: UnsatisfiedLinkError) {
+                Log.e("SafePathApplication", "Kakao map native library is unavailable", error)
+            }
         }
 
         val keyHash = getKeyHash()

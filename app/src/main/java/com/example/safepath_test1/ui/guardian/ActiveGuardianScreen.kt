@@ -44,7 +44,9 @@ fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
     var error by remember(uid) { mutableStateOf<String?>(null) }
     var loading by remember(uid) { mutableStateOf(true) }
     var selectedId by remember(uid) { mutableStateOf<String?>(null) }
-    LaunchedEffect(uid, revision) {
+    val target by com.example.safepath_test1.api.NotificationNavigation.openProtection.collectAsState()
+    var notice by remember(uid) { mutableStateOf<String?>(null) }
+    LaunchedEffect(uid, revision, target) {
         error = null; loading = true
         if (uid == null) { loading = false; return@LaunchedEffect }
         try {
@@ -58,6 +60,17 @@ fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
                 session?.let { ActiveGuardianSession(it.id, registration.userName, it.startedAt, registration.canViewStatus) }
             }
             check(FirebaseAuth.getInstance().currentUser?.uid == uid) { "로그인 계정이 변경되었습니다." }
+            target?.let { alert ->
+                val sender = registrations.firstOrNull { it.userId == alert.userId }
+                selectedId = when {
+                    alert.type == "SESSION_ENDED" -> null
+                    alert.sessionId != null -> active.firstOrNull { it.id == alert.sessionId }?.id
+                    sender != null -> api.activeSession(sender.userId)?.id?.takeIf { id -> active.any { it.id == id } }
+                    else -> null
+                }
+                notice = if (selectedId != null) null else if (alert.type == "SESSION_ENDED") "${sender?.userName ?: "보호 대상자"}의 귀가 세션이 종료되었습니다." else "이 알림에 해당하는 진행 중인 귀가를 확인할 수 없습니다."
+                com.example.safepath_test1.api.NotificationNavigation.consume(alert)
+            }
             rows = active.distinctBy { it.id }.sortedGuardianSessions()
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = accountErrorMessage(e) }
@@ -117,6 +130,7 @@ fun ActiveGuardianScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+        notice?.let { Text(it) }
         Text("진행 중인 귀가", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextMain)
         when {
             loading -> GuardianStatePanel("귀가 정보를 확인하고 있어요", "잠시만 기다려 주세요.")

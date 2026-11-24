@@ -74,6 +74,13 @@ fun SafePathKakaoMapView(
     onFacilityStatus: (com.example.safepath_test1.location.FacilityType, Boolean) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
+    val application = context.applicationContext as com.example.safepath_test1.SafePathApplication
+    if (!application.isMapAvailable) {
+        androidx.compose.foundation.layout.Box(modifier, contentAlignment = androidx.compose.ui.Alignment.Center) {
+            androidx.compose.material3.Text("이 기기에서 지도를 표시할 수 없어요.")
+        }
+        return
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnMapClick by rememberUpdatedState(onMapClick)
     val latestCurrentLocation by rememberUpdatedState(currentLocation)
