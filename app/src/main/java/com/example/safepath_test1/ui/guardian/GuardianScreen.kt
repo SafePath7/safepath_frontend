@@ -153,6 +153,7 @@ fun FriendsScreen(
         }
     }
     var disconnect by remember { mutableStateOf<GuardianItem?>(null) }
+    var selectedFriend by remember { mutableStateOf<GuardianItem?>(null) }
     var guardianCandidate by remember { mutableStateOf<GuardianItem?>(null) }
     var guardianCandidateId by rememberSaveable { mutableStateOf("") }
     val matches =
@@ -304,7 +305,7 @@ fun FriendsScreen(
                 items(matches, key = { it.id }) { friend ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .combinedClickable(onClick = {}, onLongClick = { disconnect = friend })
+                            .combinedClickable(onClick = { selectedFriend = friend }, onLongClick = { disconnect = friend })
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -350,6 +351,20 @@ fun FriendsScreen(
                     }
                 }
             }
+    }
+    selectedFriend?.let { friend ->
+        AlertDialog(
+            onDismissRequest = { selectedFriend = null },
+            title = { Text("친구 정보") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("이름: ${friend.name}")
+                    Text("관계: ${friend.relationship}")
+                    Text("전화번호: ${friend.phone.ifBlank { "정보 없음" }}")
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedFriend = null }) { Text("확인") } },
+        )
     }
     if (showAddFriend)
         AddFriendDialog(

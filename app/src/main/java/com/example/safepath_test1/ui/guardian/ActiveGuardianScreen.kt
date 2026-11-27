@@ -231,11 +231,17 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
         else -> "상태 미확인"
     }
     Box(modifier.fillMaxSize()) {
-        SafePathKakaoMapView(
+        if (current != null || points.isNotEmpty()) SafePathKakaoMapView(
             currentLocation = current,
             hasLocationPermission = true,
             recenterToken = 0,
             destinationPoint = points.lastOrNull(),
+            currentMarkerColor = when (location?.status) {
+                "SAFE" -> "#2EAD68"
+                "RISK_SUSPECTED" -> "#F59E0B"
+                "EMERGENCY" -> "#DC2626"
+                else -> "#5FA8D3"
+            },
             routeLineGeoJson = travelled,
             remainingRouteGeoJson = remaining,
             showSafetyFacilities = false,
@@ -253,7 +259,8 @@ private fun ActiveGuardianDetail(session: ActiveGuardianSession, onBack: () -> U
         }
         Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), color = Color.White, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), shadowElevation = 4.dp) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(route?.destinationName?.takeIf { it.isNotBlank() } ?: "목적지 정보 없음", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("출발지: " + (points.firstOrNull()?.let { "%.5f, %.5f".format(it.latitude, it.longitude) } ?: "정보 없음"), style = MaterialTheme.typography.bodyMedium)
+                Text("목적지: " + (route?.destinationName?.takeIf { it.isNotBlank() } ?: "정보 없음"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(connection, color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 Text("이동 기록은 이 화면을 연 뒤 수신한 위치부터 표시됩니다.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                 if (loading) Text("경로 정보를 확인하고 있어요.", color = TextMuted)
